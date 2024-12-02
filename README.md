@@ -216,6 +216,11 @@ $bsky->createPost(
     reply_to   => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
     text       => 'こんにちは, World!'
 );
+
+$bsky->createPost(
+    video      => 'path/to/cat.mpeg',
+    text       => 'Loot at this little guy!'
+);
 ```
 
 Create a new post.
@@ -303,6 +308,53 @@ Expected parameters include:
 
     These are not visible in the current Bluesky interface but do cause posts to return as results to to search (such as
     [https://bsky.app/hashtag/perl](https://bsky.app/hashtag/perl).
+
+- `video`
+
+    A video to be embedded in a Bluesky record (eg, a post).
+
+    This might be a single path, raw data, or a hash reference (if you're really into what and how the video is presented).
+
+    If passed a hash, the following are expected:
+
+    - `video` - required
+
+        The path name.
+
+    - `alt`
+
+        Alt text description of the video, for accessibility.
+
+    - `mime`
+
+        Mime type.
+
+        We try to figure this out internally if undefined.
+
+    - `aspectRatio`
+
+        Represents an aspect ratio.
+
+        It may be approximate, and may not correspond to absolute dimensions in any given unit.
+
+        ```perl
+        ...
+        aspectRatio =>{ width => 100, height => 120 },
+        ...
+        ```
+
+    - `captions`
+
+        This is a hash reference of up to 20 [WebVTT](https://en.wikipedia.org/wiki/WebVTT) files organized by language.
+
+        ```perl
+        ...
+        captions => {
+            en => 'english.vtt',
+            ja => 'japanese.vtt'
+        },
+        ...
+        ```
 
 Note that a post may only contain one of the following embeds: `image`, `video`, `embed_url`, or `embed_ref`.
 

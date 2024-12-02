@@ -74,7 +74,7 @@ package Bluesky 0.01 {
         method resolveHandle() { }
         method updateHandle()  { }
 
-        # Nice stuff
+        # Utils
         method parse_mentions($text) {
             my @spans;
             push @spans, { start => $-[1], handle => $2, end => $+[1] }
@@ -157,15 +157,16 @@ package Bluesky 0.01 {
                 'com.atproto.repo.uploadBlob' => {
                     headers => {
                         'Content-Type' => (
-                            defined $mime_type                    ? $mime_type :
-                                $bytes =~ /^GIF89a/               ? 'image/gif' :
-                                $bytes =~ /^.{2}JFIF/             ? 'image/jpeg' :
-                                $bytes =~ /^.{4}PNG\r\n\x1a\n/    ? 'image/png' :
-                                $bytes =~ /^.{8}BM/               ? 'image/bmp' :
-                                $bytes =~ /^.{4}II\x42\x4D/       ? 'image/tiff' :
-                                $bytes =~ /^.{4}MM\x42\x4D/       ? 'image/tiff' :
-                                $bytes =~ /^.{4}8BPS/             ? 'image/psd' :
-                                $bytes =~ /^data:image\/svg+xml;/ ? 'image/svg+xml' :
+                            defined $mime_type                                         ? $mime_type :
+                                $bytes =~ /^GIF89a/                                    ? 'image/gif' :
+                                $bytes =~ /^.{2}JFIF/                                  ? 'image/jpeg' :
+                                $bytes =~ /^.{4}PNG\r\n\x1a\n/                         ? 'image/png' :
+                                $bytes =~ /^.{8}BM/                                    ? 'image/bmp' :
+                                $bytes =~ /^.{4}(II|MM)\x42\x4D/                       ? 'image/tiff' :
+                                $bytes =~ /^.{4}8BPS/                                  ? 'image/psd' :
+                                $bytes =~ /^data:image\/svg+xml;/                      ? 'image/svg+xml' :
+                                $bytes =~ /^.{4}ftypqt /                               ? 'video/quicktime' :
+                                $bytes =~ /^.{4}ftyp(isom|mp4[12]?|MSNV|M4[v|a]|f4v)/i ? 'video/mp4' :
                                 'application/octet-stream'
                         )
                     },
@@ -205,6 +206,60 @@ package Bluesky 0.01 {
                 push @ret, { alt => $alt, image => $blob };
             }
             { '$type' => 'app.bsky.embed.images', images => \@ret };
+        }
+
+        method uploadVideoCaption( $lang, $caption ) {
+            if ( builtin::blessed $caption ) {
+                At::Error->new( message => 'caption file size too large. 20000 bytes maximum, got: ' . $caption->size )->throw
+                    if $caption->size > 20000;
+                $caption = $caption->slurp_raw;
+            }
+            elsif ( ( $^O eq 'MSWin32' ? $caption !~ m/[\x00<>:"\/\\|?*]/ : 1 ) && -e $caption ) {
+                $caption = path($caption);
+                At::Error->new( message => 'caption file size too large. 20000 bytes maximum, got: ' . $caption->size )->throw
+                    if $caption->size > 20000;
+                $caption = path($caption)->slurp_raw;
+            }
+            else {
+                At::Error->new( message => 'cation file size too large. 20000 bytes maximum, got: ' . length $caption )->throw
+                    if length $caption > 20000;
+            }
+            my $blob = $self->uploadFile( $caption, 'text/vtt' );
+            $blob || $blob->throw;
+            { '$type' => 'app.bsky.embed.video#caption', lang => $lang, file => $blob };
+        }
+
+        method uploadVideo($vid) {
+            my @ret;
+            my ( $alt, $mime, $aspectRatio );
+            my @captions;
+            if ( ( builtin::reftype($vid) // '' ) eq 'HASH' ) {
+                $alt         = $vid->{alt};
+                $mime        = $vid->{mime} // ();
+                $aspectRatio = $vid->{aspectRatio};
+                @captions    = map { { lang => $_, file => $self->uploadFile( $vid->{captions}{$_}, 'text/vtt' ) } } keys %{ $vid->{captions} };
+                $vid         = $vid->{video};
+            }
+            if ( builtin::blessed $vid ) {
+                At::Error->new( message => 'video file size too large. 50000000 bytes maximum, got: ' . $vid->size )->throw if $vid->size > 50000000;
+                $vid = $vid->slurp_raw;
+            }
+            elsif ( ( $^O eq 'MSWin32' ? $vid !~ m/[\x00<>:"\/\\|?*]/ : 1 ) && -e $vid ) {
+                $vid = path($vid);
+                At::Error->new( message => 'video file size too large. 50000000 bytes maximum, got: ' . $vid->size )->throw if $vid->size > 50000000;
+                $vid = path($vid)->slurp_raw;
+            }
+            else {
+                At::Error->new( message => 'video file size too large. 50000000 bytes maximum, got: ' . length $vid )->throw
+                    if length $vid > 50000000;
+            }
+            my $blob = $self->uploadFile( $vid, $mime );
+            $blob || return $blob->throw;
+            {   '$type' => 'app.bsky.embed.video',
+                video   => $blob,
+                ( @captions            ? ( captions    => \@captions )   : () ), ( defined $alt ? ( alt => $alt ) : () ),
+                ( defined $aspectRatio ? ( aspectRatio => $aspectRatio ) : () )
+            };
         }
 
         method getEmbedRef($uri) {
@@ -274,6 +329,9 @@ package Bluesky 0.01 {
             # embeds
             if ( defined $args{image} ) {
                 $post{embed} = $self->uploadImages( ( ( builtin::reftype( $args{image} ) // '' ) eq 'ARRAY' ) ? @{ $args{image} } : $args{image} );
+            }
+            if ( defined $args{video} ) {
+                $post{embed} = $self->uploadVideo( ( ( builtin::reftype( $args{video} ) // '' ) eq 'ARRAY' ) ? @{ $args{video} } : $args{video} );
             }
             elsif ( defined $args{embed_url} ) {
                 $post{embed} = $self->fetch_embed_url_card( $args{embed_url} );
@@ -623,6 +681,11 @@ Default: 50, Minimum: 1, Maximum: 100.
         text       => 'こんにちは, World!'
     );
 
+    $bsky->createPost(
+        video      => 'path/to/cat.mpeg',
+        text       => 'Loot at this little guy!'
+    );
+
 Create a new post.
 
 Expected parameters include:
@@ -706,6 +769,53 @@ Additional hashtags, in addition to any included in post text and facets.
 
 These are not visible in the current Bluesky interface but do cause posts to return as results to to search (such as
 L<https://bsky.app/hashtag/perl>.
+
+=item C<video>
+
+A video to be embedded in a Bluesky record (eg, a post).
+
+This might be a single path, raw data, or a hash reference (if you're really into what and how the video is presented).
+
+If passed a hash, the following are expected:
+
+=over
+
+=item C<video> - required
+
+The path name.
+
+=item C<alt>
+
+Alt text description of the video, for accessibility.
+
+=item C<mime>
+
+Mime type.
+
+We try to figure this out internally if undefined.
+
+=item C<aspectRatio>
+
+Represents an aspect ratio.
+
+It may be approximate, and may not correspond to absolute dimensions in any given unit.
+
+    ...
+    aspectRatio =>{ width => 100, height => 120 },
+    ...
+
+=item C<captions>
+
+This is a hash reference of up to 20 L<WebVTT|https://en.wikipedia.org/wiki/WebVTT> files organized by language.
+
+    ...
+    captions => {
+        en => 'english.vtt',
+        ja => 'japanese.vtt'
+    },
+    ...
+
+=back
 
 =back
 
