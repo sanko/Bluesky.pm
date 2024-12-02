@@ -35,10 +35,66 @@ package Bluesky 0.01 {
             my $res = $at->get( 'app.bsky.feed.getPosts' => { uris => \@uris } );
             $res ? $res->{posts} // () : $res;
         }
-        method getLikes(%args)            { my $res = $at->get( 'app.bsky.feed.getLikes' => \%args ); }
-        method getRepostedBy()            { }
-        method post()                     { }
-        method deletePost()               { }
+        method getLikes(%args) { my $res = $at->get( 'app.bsky.feed.getLikes' => \%args ); }
+        method getRepostedBy() { }
+
+        method createPost(%args) {
+
+            # TODO:
+            #   - video and recordWithMedia embeds
+            #
+            my %post = (    # these are the required fields which every post must include
+                '$type'   => 'app.bsky.feed.post',
+                text      => $args{text}      // '',
+                createdAt => $args{timestamp} // $at->now    # trailing "Z" is preferred over "+00:00"
+            );
+
+            # indicate included languages (optional)
+            $post{langs} = [ ( ( builtin::reftype( $args{lang} ) // '' ) eq 'ARRAY' ) ? @{ $args{lang} } : $args{lang} ] if defined $args{lang};
+
+            # parse out mentions and URLs as "facets"
+            if ( length $post{text} > 0 ) {
+                my @facets = $self->parse_facets( $post{text} );
+                $post{facets} = \@facets if @facets;
+            }
+
+            # additional tags (up to 8)
+            $post{tags} = [ ( builtin::reftype( $args{tags} ) // '' ) eq 'ARRAY' ? @{ $args{tags} } : $args{tags} ] if defined $args{tags};
+
+            # metadata tags on an atproto record, published by the author within the record (up to 10)
+            $post{labels} = {
+                '$type' => 'com.atproto.label.defs#selfLabels',
+                values  => [
+                    map { { '$type' => 'com.atproto.label.defs#selfLabel', val => $_ } }
+                        ( ( builtin::reftype( $args{labels} ) // '' ) eq 'ARRAY' ? @{ $args{labels} } : $args{labels} )
+                ]
+                }
+                if defined $args{labels};
+
+            #~ com.atproto.label.defs#selfLabels
+            # if this is a reply, get references to the parent and root
+            $post{reply} = $self->getReplyRefs( $args{reply_to} ) if defined $args{reply_to};
+
+            # embeds
+            if ( defined $args{image} ) {
+                $post{embed} = $self->uploadImages( ( ( builtin::reftype( $args{image} ) // '' ) eq 'ARRAY' ) ? @{ $args{image} } : $args{image} );
+            }
+            if ( defined $args{video} ) {
+                $post{embed} = $self->uploadVideo( ( ( builtin::reftype( $args{video} ) // '' ) eq 'ARRAY' ) ? @{ $args{video} } : $args{video} );
+            }
+            elsif ( defined $args{embed_url} ) {
+                $post{embed} = $self->fetch_embed_url_card( $args{embed_url} );
+            }
+            elsif ( defined $args{embed_ref} ) {
+                $post{embed} = $self->getEmbedRef( $args{embed_ref} );
+            }
+            $at->post( 'com.atproto.repo.createRecord' => { repo => $self->did, collection => 'app.bsky.feed.post', record => \%post } );
+        }
+
+        method deletePost($at_uri) {
+            $at_uri = At::Protocol::URI->new($at_uri) unless builtin::blessed $at_uri;
+            $at->post( 'com.atproto.repo.deleteRecord' => { repo => $at_uri->host, collection => 'app.bsky.feed.post', rkey => $at_uri->rkey } );
+        }
         method like( $uri, $cid )         { }
         method deleteLike($likeUri)       { }
         method repost( $uri, $cid )       { }
@@ -289,59 +345,6 @@ package Bluesky 0.01 {
             { '$type' => 'app.bsky.embed.external', external => \%card };
         }
 
-        method createPost(%args) {
-
-            # TODO:
-            #   - video and recordWithMedia embeds
-            #
-            my %post = (    # these are the required fields which every post must include
-                '$type'   => 'app.bsky.feed.post',
-                text      => $args{text}      // '',
-                createdAt => $args{timestamp} // $at->now    # trailing "Z" is preferred over "+00:00"
-            );
-
-            # indicate included languages (optional)
-            $post{langs} = [ ( ( builtin::reftype( $args{lang} ) // '' ) eq 'ARRAY' ) ? @{ $args{lang} } : $args{lang} ] if defined $args{lang};
-
-            # parse out mentions and URLs as "facets"
-            if ( length $post{text} > 0 ) {
-                my @facets = $self->parse_facets( $post{text} );
-                $post{facets} = \@facets if @facets;
-            }
-
-            # additional tags (up to 8)
-            $post{tags} = [ ( builtin::reftype( $args{tags} ) // '' ) eq 'ARRAY' ? @{ $args{tags} } : $args{tags} ] if defined $args{tags};
-
-            # metadata tags on an atproto record, published by the author within the record (up to 10)
-            $post{labels} = {
-                '$type' => 'com.atproto.label.defs#selfLabels',
-                values  => [
-                    map { { '$type' => 'com.atproto.label.defs#selfLabel', val => $_ } }
-                        ( ( builtin::reftype( $args{labels} ) // '' ) eq 'ARRAY' ? @{ $args{labels} } : $args{labels} )
-                ]
-                }
-                if defined $args{labels};
-
-            #~ com.atproto.label.defs#selfLabels
-            # if this is a reply, get references to the parent and root
-            $post{reply} = $self->getReplyRefs( $args{reply_to} ) if defined $args{reply_to};
-
-            # embeds
-            if ( defined $args{image} ) {
-                $post{embed} = $self->uploadImages( ( ( builtin::reftype( $args{image} ) // '' ) eq 'ARRAY' ) ? @{ $args{image} } : $args{image} );
-            }
-            if ( defined $args{video} ) {
-                $post{embed} = $self->uploadVideo( ( ( builtin::reftype( $args{video} ) // '' ) eq 'ARRAY' ) ? @{ $args{video} } : $args{video} );
-            }
-            elsif ( defined $args{embed_url} ) {
-                $post{embed} = $self->fetch_embed_url_card( $args{embed_url} );
-            }
-            elsif ( defined $args{embed_ref} ) {
-                $post{embed} = $self->getEmbedRef( $args{embed_ref} );
-            }
-            $at->post( 'com.atproto.repo.createRecord' => { repo => $self->did, collection => 'app.bsky.feed.post', record => \%post } );
-        }
-
         #~ method block ($actor) {
         #~ my $profile = $self->actor_getProfile($actor);
         #~ builtin::blessed $profile or return;
@@ -377,22 +380,6 @@ package Bluesky 0.01 {
         #~ $self->repo_deleteRecord( repo => $at->did, collection => 'app.bsky.graph.follow', rkey => $rkey ) ?
         #~ $self->actor_getProfile($actor)->_raw :
         #~ ();
-        #~ }
-        #~ method post (%args) {
-        #~ $args{createdAt} //= At::_now()->_raw;
-        #~ my $repo = delete $args{repo} // $at->did->_raw;
-        #~ Carp::confess 'text must be fewer than 300 characters' if length $args{text} > 300 || bytes::length $args{text} > 300;
-        #~ use Data::Dump;
-        #~ ddx { '$type' => 'app.bsky.feed.post', repo => $repo, collection => 'app.bsky.feed.post', record => \%args };
-        #~ ...;
-        #~ my $record = $at->post(
-        #~ 'com.atproto.repo.createRecord' =>,
-        #~ { '$type' => 'app.bsky.feed.post', repo => $repo, collection => 'app.bsky.feed.post', record => \%args }
-        #~ );
-        #~ }
-        #~ method delete ( $rkey, $repo //= () ) {
-        #~ ( my $collection, $rkey ) = ( $1, $2 ) if $rkey =~ m[.+/(.+?)/(.{13})$];
-        #~ $at->post( 'com.atproto.repo.deleteRecord' => { repo => $repo // $at->did, collection => $collection, rkey => $rkey } );
         #~ }
         #~ method like ( $uri, $repo //= () ) {
         #~ $repo //= $at->did;
@@ -821,13 +808,23 @@ This is a hash reference of up to 20 L<WebVTT|https://en.wikipedia.org/wiki/WebV
 
 Note that a post may only contain one of the following embeds: C<image>, C<video>, C<embed_url>, or C<embed_ref>.
 
+=head2 C<deletePost( ... )>
 
+    $bsky->deletePost( 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lcdwvquo7y25' );
 
+    my $post = $bsky->createPost( ... );
+    ...
+    $bsky->deletePost( $post->{uri} );
 
+Delete a post or ensures it doesn't exist.
 
+Expected parameters include:
 
+=over
 
+=item C<uri> - required
 
+=back
 
 
 
@@ -889,6 +886,9 @@ Note that a post may only contain one of the following embeds: C<image>, C<video
 
 
 
+
+
+=begin :future
 
 =head2 C<block( ... )>
 
@@ -962,44 +962,6 @@ Handle or DID of the person you'd like to unfollow.
 
 Returns a true value on success.
 
-=head2 C<post( ... )>
-
-    $bsky->post( text => 'Hello, world!' );
-
-Create a new post.
-
-Expected parameters include:
-
-=over
-
-=item C<text> - required
-
-Text content of the post. Must be 300 characters or fewer.
-
-=back
-
-Note: This method will grow to support more features in the future.
-
-Returns the CID and AT-URI values on success.
-
-=head2 C<delete( ... )>
-
-    $bsky->delete( 'at://...' );
-
-Delete a post.
-
-Expected parameters include:
-
-=over
-
-=item C<url> - required
-
-The AT-URI of the post.
-
-=back
-
-Returns a true value on success.
-
 =head2 C<profile( ... )>
 
     $bsky->profile( 'sankor.bsky.social' );
@@ -1017,6 +979,8 @@ Handle or DID of the person you'd like information on.
 =back
 
 Returns a hash of data on success.
+
+=end :future
 
 =head1 See Also
 

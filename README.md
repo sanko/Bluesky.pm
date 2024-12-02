@@ -358,119 +358,21 @@ Expected parameters include:
 
 Note that a post may only contain one of the following embeds: `image`, `video`, `embed_url`, or `embed_ref`.
 
-## `block( ... )`
-
-```
-$bsky->block( 'sankor.bsky.social' );
-```
-
-Blocks a user.
-
-Expected parameters include:
-
-- `identifier` - required
-
-    Handle or DID of the person you'd like to block.
-
-Returns a true value on success.
-
-## `unblock( ... )`
-
-```
-$bsky->unblock( 'sankor.bsky.social' );
-```
-
-Unblocks a user.
-
-Expected parameters include:
-
-- `identifier` - required
-
-    Handle or DID of the person you'd like to block.
-
-Returns a true value on success.
-
-## `follow( ... )`
-
-```
-$bsky->follow( 'sankor.bsky.social' );
-```
-
-Follow a user.
-
-Expected parameters include:
-
-- `identifier` - required
-
-    Handle or DID of the person you'd like to follow.
-
-Returns a true value on success.
-
-## `unfollow( ... )`
-
-```
-$bsky->unfollow( 'sankor.bsky.social' );
-```
-
-Unfollows a user.
-
-Expected parameters include:
-
-- `identifier` - required
-
-    Handle or DID of the person you'd like to unfollow.
-
-Returns a true value on success.
-
-## `post( ... )`
+## `deletePost( ... )`
 
 ```perl
-$bsky->post( text => 'Hello, world!' );
+$bsky->deletePost( 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lcdwvquo7y25' );
+
+my $post = $bsky->createPost( ... );
+...
+$bsky->deletePost( $post->{uri} );
 ```
 
-Create a new post.
+Delete a post or ensures it doesn't exist.
 
 Expected parameters include:
 
-- `text` - required
-
-    Text content of the post. Must be 300 characters or fewer.
-
-Note: This method will grow to support more features in the future.
-
-Returns the CID and AT-URI values on success.
-
-## `delete( ... )`
-
-```
-$bsky->delete( 'at://...' );
-```
-
-Delete a post.
-
-Expected parameters include:
-
-- `url` - required
-
-    The AT-URI of the post.
-
-Returns a true value on success.
-
-## `profile( ... )`
-
-```
-$bsky->profile( 'sankor.bsky.social' );
-```
-
-Gathers profile data.
-
-Expected parameters include:
-
-- `identifier` - required
-
-    Handle or DID of the person you'd like information on.
-
-Returns a hash of data on success.
+- `uri` - required
 
 # See Also
 
