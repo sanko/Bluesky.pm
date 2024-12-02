@@ -8,8 +8,7 @@ Bluesky - Bluesky Client Library in Perl
 use Bluesky;
 my $bsky = Bluesky->new();
 $bsky->login( 'sanko', '1111-2222-3333-4444' );
-$bsky->block( 'sankor.bsky.social' );
-$bsky->unblock( 'sankor.bsky.social' );
+$bsky->createPost( ... );
 # To be continued...
 ```
 
@@ -376,7 +375,11 @@ Expected parameters include:
 
 # See Also
 
+[At](https://metacpan.org/pod/At) - AT Protocol library
+
 [App::bsky](https://metacpan.org/pod/App%3A%3Absky) - Bluesky client on the command line
+
+[https://docs.bsky.app/docs/api/](https://docs.bsky.app/docs/api/)
 
 # LICENSE
 

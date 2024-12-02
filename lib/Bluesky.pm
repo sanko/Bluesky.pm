@@ -41,7 +41,7 @@ package Bluesky 0.01 {
         method createPost(%args) {
 
             # TODO:
-            #   - video and recordWithMedia embeds
+            #   - recordWithMedia embed
             #
             my %post = (    # these are the required fields which every post must include
                 '$type'   => 'app.bsky.feed.post',
@@ -79,8 +79,8 @@ package Bluesky 0.01 {
             if ( defined $args{image} ) {
                 $post{embed} = $self->uploadImages( ( ( builtin::reftype( $args{image} ) // '' ) eq 'ARRAY' ) ? @{ $args{image} } : $args{image} );
             }
-            if ( defined $args{video} ) {
-                $post{embed} = $self->uploadVideo( ( ( builtin::reftype( $args{video} ) // '' ) eq 'ARRAY' ) ? @{ $args{video} } : $args{video} );
+            elsif ( defined $args{video} ) {
+                $post{embed} = $self->uploadVideo( $args{video} );
             }
             elsif ( defined $args{embed_url} ) {
                 $post{embed} = $self->fetch_embed_url_card( $args{embed_url} );
@@ -344,85 +344,6 @@ package Bluesky 0.01 {
             }
             { '$type' => 'app.bsky.embed.external', external => \%card };
         }
-
-        #~ method block ($actor) {
-        #~ my $profile = $self->actor_getProfile($actor);
-        #~ builtin::blessed $profile or return;
-        #~ $at->post(
-        #~ 'com.atproto.repo.createRecord' => {
-        #~ repo       => $at->session->did,
-        #~ collection => 'app.bsky.graph.block',
-        #~ record     => At::Lexicon::app::bsky::graph::block->new( createdAt => time, subject => $profile->did )
-        #~ }
-        #~ ) ? $at->get( 'com.atproto.actor.getProfile' => { actor => $actor } ) : ();
-        #~ }
-        #~ method unblock ($actor) {
-        #~ my $profile = $self->actor_getProfile($actor);
-        #~ builtin::blessed $profile or return;
-        #~ return unless $profile->viewer->blocking;
-        #~ my ($rkey) = $profile->viewer->blocking =~ m[app.bsky.graph.block/(.*)$];
-        #~ $self->repo_deleteRecord( repo => $at->session->did, collection => 'app.bsky.graph.block', rkey => $rkey ) ? $self->profile($actor) : ();
-        #~ }
-        #~ method follow ($actor) {
-        #~ my $profile = $self->actor_getProfile($actor);
-        #~ builtin::blessed $profile or return;
-        #~ $self->repo_createRecord(
-        #~ repo       => $at->did,
-        #~ collection => 'app.bsky.graph.follow',
-        #~ record     => At::Lexicon::app::bsky::graph::follow->new( createdAt => time, subject => $profile->did )
-        #~ ) ? $self->profile($actor) : ();
-        #~ }
-        #~ method unfollow ($actor) {
-        #~ my $profile = $self->actor_getProfile($actor);
-        #~ builtin::blessed $profile or return;
-        #~ return unless $profile->viewer->following;
-        #~ my ($rkey) = $profile->viewer->following =~ m[app.bsky.graph.follow/(.*)$];
-        #~ $self->repo_deleteRecord( repo => $at->did, collection => 'app.bsky.graph.follow', rkey => $rkey ) ?
-        #~ $self->actor_getProfile($actor)->_raw :
-        #~ ();
-        #~ }
-        #~ method like ( $uri, $repo //= () ) {
-        #~ $repo //= $at->did;
-        #~ my $res = $self->feed_getPosts($uri);
-        #~ $res->{posts} // return;
-        #~ $at->post(
-        #~ 'com.atproto.repo.createRecord' => {
-        #~ repo       => $repo,
-        #~ collection => 'app.bsky.feed.like',
-        #~ record     =>
-        #~ At::Lexicon::app::bsky::feed::like->new( createdAt => At::_now(), subject => { cid => $res->{posts}[0]->cid, uri => $uri } )
-        #~ }
-        #~ );
-        #~ my $record = $at->post(
-        #~ 'com.atproto.repo.createRecord' =>,
-        #~ { '$type' => 'app.bsky.feed.like', repo => $repo, collection => 'app.bsky.feed.like', record => {} }
-        #~ );
-        #~ }
-        #~ method unlike ( $rkey, $repo //= () ) {
-        #~ if ( $rkey =~ m[app.bsky.feed.post] ) {
-        #~ my $res = $self->feed_getPosts($rkey);
-        #~ $rkey = $res->{posts}[0]->viewer->like;
-        #~ }
-        #~ if ( $rkey =~ m[app.bsky.feed.like/(.*)$] ) {
-        #~ $rkey = $1;
-        #~ }
-        #~ $at->post( 'com.atproto.repo.deleteRecord' => { repo => $repo // $at->did, collection => 'app.bsky.feed.like', rkey => $rkey } );
-        #~ }
-        #~ method repost ( $uri, $repo //= () ) {
-        #~ $repo //= $at->did;
-        #~ my $res = $self->feed_getPosts($uri);
-        #~ $res->{posts} // return;
-        #~ $self->repo_createRecord(
-        #~ repo       => $repo,
-        #~ collection => 'app.bsky.feed.repost',
-        #~ record     =>
-        #~ At::Lexicon::app::bsky::feed::repost->new( createdAt => At::_now(), subject => { cid => $res->{posts}[0]->cid, uri => $uri } )
-        #~ );
-        #~ }
-        #~ method profile ($actor) {
-        #~ my $res = $self->actor_getProfile($actor);
-        #~ builtin::blessed $res? $res->_raw : ();
-        #~ }
     }
 };
 1;
@@ -439,8 +360,7 @@ Bluesky - Bluesky Client Library in Perl
     use Bluesky;
     my $bsky = Bluesky->new();
     $bsky->login( 'sanko', '1111-2222-3333-4444' );
-    $bsky->block( 'sankor.bsky.social' );
-    $bsky->unblock( 'sankor.bsky.social' );
+    $bsky->createPost( ... );
     # To be continued...
 
 =head1 DESCRIPTION
@@ -826,165 +746,13 @@ Expected parameters include:
 
 =back
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-=begin :future
-
-=head2 C<block( ... )>
-
-    $bsky->block( 'sankor.bsky.social' );
-
-Blocks a user.
-
-Expected parameters include:
-
-=over
-
-=item C<identifier> - required
-
-Handle or DID of the person you'd like to block.
-
-=back
-
-Returns a true value on success.
-
-=head2 C<unblock( ... )>
-
-    $bsky->unblock( 'sankor.bsky.social' );
-
-Unblocks a user.
-
-Expected parameters include:
-
-=over
-
-=item C<identifier> - required
-
-Handle or DID of the person you'd like to block.
-
-=back
-
-Returns a true value on success.
-
-=head2 C<follow( ... )>
-
-    $bsky->follow( 'sankor.bsky.social' );
-
-Follow a user.
-
-Expected parameters include:
-
-=over
-
-=item C<identifier> - required
-
-Handle or DID of the person you'd like to follow.
-
-=back
-
-Returns a true value on success.
-
-=head2 C<unfollow( ... )>
-
-    $bsky->unfollow( 'sankor.bsky.social' );
-
-Unfollows a user.
-
-Expected parameters include:
-
-=over
-
-=item C<identifier> - required
-
-Handle or DID of the person you'd like to unfollow.
-
-=back
-
-Returns a true value on success.
-
-=head2 C<profile( ... )>
-
-    $bsky->profile( 'sankor.bsky.social' );
-
-Gathers profile data.
-
-Expected parameters include:
-
-=over
-
-=item C<identifier> - required
-
-Handle or DID of the person you'd like information on.
-
-=back
-
-Returns a hash of data on success.
-
-=end :future
-
 =head1 See Also
 
+L<At> - AT Protocol library
+
 L<App::bsky> - Bluesky client on the command line
+
+L<https://docs.bsky.app/docs/api/>
 
 =head1 LICENSE
 
