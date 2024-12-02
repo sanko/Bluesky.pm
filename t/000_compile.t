@@ -239,7 +239,7 @@ END
             skip 1 unless $img->{success};
             is my $image_reply = $bsky->createPost(
                 reply_to => $post->{uri},
-                image    => [ { image => $img->{content}, alt => 'Lorem Picsum', mime => $img->{headers}{'content-type'} } ],
+                embed    => { images => [ { image => $img->{content}, alt => 'Lorem Picsum', mime => $img->{headers}{'content-type'} } ] },
                 text     => <<'END'),
 Yet another test.
 

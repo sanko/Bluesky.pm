@@ -76,17 +76,26 @@ package Bluesky 0.01 {
             $post{reply} = $self->getReplyRefs( $args{reply_to} ) if defined $args{reply_to};
 
             # embeds
-            if ( defined $args{image} ) {
-                $post{embed} = $self->uploadImages( ( ( builtin::reftype( $args{image} ) // '' ) eq 'ARRAY' ) ? @{ $args{image} } : $args{image} );
-            }
-            elsif ( defined $args{video} ) {
-                $post{embed} = $self->uploadVideo( $args{video} );
-            }
-            elsif ( defined $args{embed_url} ) {
-                $post{embed} = $self->fetch_embed_url_card( $args{embed_url} );
-            }
-            elsif ( defined $args{embed_ref} ) {
-                $post{embed} = $self->getEmbedRef( $args{embed_ref} );
+            if ( defined $args{embed} ) {
+                if ( defined $args{embed}{images} ) {
+                    $post{embed} = $self->uploadImages(
+
+                        #~ ( ( builtin::reftype( $args{embed}{images} ) // '' ) eq 'ARRAY' ) ?
+                        @{ $args{embed}{images} }
+
+                        #~ :
+                        #~ $args{embed}{images}
+                    );
+                }
+                elsif ( defined $args{embed}{video} ) {
+                    $post{embed} = $self->uploadVideo( $args{embed}{video} );
+                }
+                elsif ( defined $args{embed}{url} ) {
+                    $post{embed} = $self->fetch_embed_url_card( $args{embed}{url} );
+                }
+                elsif ( defined $args{embed}{ref} ) {
+                    $post{embed} = $self->getEmbedRef( $args{embed}{ref} );
+                }
             }
             $at->post( 'com.atproto.repo.createRecord' => { repo => $self->did, collection => 'app.bsky.feed.post', record => \%post } );
         }
@@ -570,13 +579,13 @@ Default: 50, Minimum: 1, Maximum: 100.
     );
 
     $bsky->createPost(
-        embed_url => 'https://en.wikipedia.org/wiki/Main_Page',
+        embed      => { url => 'https://en.wikipedia.org/wiki/Main_Page' },
         text       => <<'END');
     This is the link to wikipedia, @atproto.bsky.social. You should check it out.
     END
 
     $bsky->createPost(
-        image     => 'path/to/my.jpg',
+        embed      => { images     => ['path/to/my.jpg'] },
         lang       => 'en',
         reply_to   => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
         text       => 'I found this image on https://google.com/'
@@ -589,7 +598,7 @@ Default: 50, Minimum: 1, Maximum: 100.
     );
 
     $bsky->createPost(
-        video      => 'path/to/cat.mpeg',
+        embed      => { video      => 'path/to/cat.mpeg' },
         text       => 'Loot at this little guy!'
     );
 
@@ -650,32 +659,31 @@ L<https://www.iana.org/assignments/language-subtag-registry/language-subtag-regi
 
 AT-URL of a post to reply to.
 
-=item C<image>
+=item C<embed>
 
-One of more images (path name or raw data).
+Bluesky allows for posts to contain embedded data.
+
+Known embed types:
+
+=over
+
+=item C<images>
+
+Up to 4 images (path name or raw data).
 
 Set alt text by passing a hash:
 
     [ ..., { alt => 'A person standing outdoors.', image => 'camping.jpg' } ]
 
-=item C<embed_url>
+
+=item C<url>
 
 A URL. A card (including the URL, the page title, and a description) will be presented in a GUI.
 
-=item C<embed_ref>
+=item C<ref>
 
 An AT-URL to link from this post.
 
-=item C<labels>
-
-Self-label values for this post. Effectively content warnings.
-
-=item C<tags>
-
-Additional hashtags, in addition to any included in post text and facets.
-
-These are not visible in the current Bluesky interface but do cause posts to return as results to to search (such as
-L<https://bsky.app/hashtag/perl>.
 
 =item C<video>
 
@@ -723,6 +731,21 @@ This is a hash reference of up to 20 L<WebVTT|https://en.wikipedia.org/wiki/WebV
     ...
 
 =back
+
+=back
+
+You may also pass your own valid embed.
+
+=item C<labels>
+
+Self-label values for this post. Effectively content warnings.
+
+=item C<tags>
+
+Additional hashtags, in addition to any included in post text and facets.
+
+These are not visible in the current Bluesky interface but do cause posts to return as results to to search (such as
+L<https://bsky.app/hashtag/perl>.
 
 =back
 

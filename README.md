@@ -198,13 +198,13 @@ $bsky->createPost(
 );
 
 $bsky->createPost(
-    embed_url => 'https://en.wikipedia.org/wiki/Main_Page',
+    embed      => { url => 'https://en.wikipedia.org/wiki/Main_Page' },
     text       => <<'END');
 This is the link to wikipedia, @atproto.bsky.social. You should check it out.
 END
 
 $bsky->createPost(
-    image     => 'path/to/my.jpg',
+    embed      => { images     => ['path/to/my.jpg'] },
     lang       => 'en',
     reply_to   => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
     text       => 'I found this image on https://google.com/'
@@ -217,7 +217,7 @@ $bsky->createPost(
 );
 
 $bsky->createPost(
-    video      => 'path/to/cat.mpeg',
+    embed      => { video      => 'path/to/cat.mpeg' },
     text       => 'Loot at this little guy!'
 );
 ```
@@ -279,23 +279,78 @@ Expected parameters include:
 
     AT-URL of a post to reply to.
 
-- `image`
+- `embed`
 
-    One of more images (path name or raw data).
+    Bluesky allows for posts to contain embedded data.
 
-    Set alt text by passing a hash:
+    Known embed types:
 
-    ```perl
-    [ ..., { alt => 'A person standing outdoors.', image => 'camping.jpg' } ]
-    ```
+    - `images`
 
-- `embed_url`
+        Up to 4 images (path name or raw data).
 
-    A URL. A card (including the URL, the page title, and a description) will be presented in a GUI.
+        Set alt text by passing a hash:
 
-- `embed_ref`
+        ```perl
+        [ ..., { alt => 'A person standing outdoors.', image => 'camping.jpg' } ]
+        ```
 
-    An AT-URL to link from this post.
+    - `url`
+
+        A URL. A card (including the URL, the page title, and a description) will be presented in a GUI.
+
+    - `ref`
+
+        An AT-URL to link from this post.
+
+    - `video`
+
+        A video to be embedded in a Bluesky record (eg, a post).
+
+        This might be a single path, raw data, or a hash reference (if you're really into what and how the video is presented).
+
+        If passed a hash, the following are expected:
+
+        - `video` - required
+
+            The path name.
+
+        - `alt`
+
+            Alt text description of the video, for accessibility.
+
+        - `mime`
+
+            Mime type.
+
+            We try to figure this out internally if undefined.
+
+        - `aspectRatio`
+
+            Represents an aspect ratio.
+
+            It may be approximate, and may not correspond to absolute dimensions in any given unit.
+
+            ```perl
+            ...
+            aspectRatio =>{ width => 100, height => 120 },
+            ...
+            ```
+
+        - `captions`
+
+            This is a hash reference of up to 20 [WebVTT](https://en.wikipedia.org/wiki/WebVTT) files organized by language.
+
+            ```perl
+            ...
+            captions => {
+                en => 'english.vtt',
+                ja => 'japanese.vtt'
+            },
+            ...
+            ```
+
+    You may also pass your own valid embed.
 
 - `labels`
 
@@ -307,53 +362,6 @@ Expected parameters include:
 
     These are not visible in the current Bluesky interface but do cause posts to return as results to to search (such as
     [https://bsky.app/hashtag/perl](https://bsky.app/hashtag/perl).
-
-- `video`
-
-    A video to be embedded in a Bluesky record (eg, a post).
-
-    This might be a single path, raw data, or a hash reference (if you're really into what and how the video is presented).
-
-    If passed a hash, the following are expected:
-
-    - `video` - required
-
-        The path name.
-
-    - `alt`
-
-        Alt text description of the video, for accessibility.
-
-    - `mime`
-
-        Mime type.
-
-        We try to figure this out internally if undefined.
-
-    - `aspectRatio`
-
-        Represents an aspect ratio.
-
-        It may be approximate, and may not correspond to absolute dimensions in any given unit.
-
-        ```perl
-        ...
-        aspectRatio =>{ width => 100, height => 120 },
-        ...
-        ```
-
-    - `captions`
-
-        This is a hash reference of up to 20 [WebVTT](https://en.wikipedia.org/wiki/WebVTT) files organized by language.
-
-        ```perl
-        ...
-        captions => {
-            en => 'english.vtt',
-            ja => 'japanese.vtt'
-        },
-        ...
-        ```
 
 Note that a post may only contain one of the following embeds: `image`, `video`, `embed_url`, or `embed_ref`.
 
