@@ -106,7 +106,7 @@
    "provides" : {
       "Bluesky" : {
          "file" : "lib/Bluesky.pm",
-         "version" : "0.01"
+         "version" : "0.19"
       }
    },
    "release_status" : "stable",
@@ -124,7 +124,7 @@
          "web" : "https://github.com/sanko/Bluesky.pm"
       }
    },
-   "version" : "0.01",
+   "version" : "0.19",
    "x_ignore" : [
       "github",
       ".gitignore",
