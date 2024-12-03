@@ -335,6 +335,7 @@ package Bluesky 0.01 {
                 $job || return $job->throw;
                 for ( 1 .. 30 ) {    # TODO: I need to make this async when At.pm is wrapping Mojo::UA
                     $job = $at->get( 'app.bsky.video.getJobStatus' => { jobId => $job->{jobId} } );
+
                     #~ ddx $job;
                     $job || return $job->throw;
                     last if $job->{state} eq 'JOB_STATE_COMPLETED';
@@ -605,35 +606,6 @@ Default: 50, Minimum: 1, Maximum: 100.
 
     $bsky->createPost( text => 'Test. Test. Test.' );
 
-    $bsky->createPost(
-        reply_to   => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
-        text       => 'Exactly!'
-    );
-
-    $bsky->createPost(
-        embed      => { url => 'https://en.wikipedia.org/wiki/Main_Page' },
-        text       => <<'END');
-    This is the link to wikipedia, @atproto.bsky.social. You should check it out.
-    END
-
-    $bsky->createPost(
-        embed      => { images     => ['path/to/my.jpg'] },
-        lang       => 'en',
-        reply_to   => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
-        text       => 'I found this image on https://google.com/'
-    );
-
-    $bsky->createPost(
-        lang       => ['en', 'ja'],
-        reply_to   => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
-        text       => 'こんにちは, World!'
-    );
-
-    $bsky->createPost(
-        embed      => { video      => 'path/to/cat.mpeg' },
-        text       => 'Loot at this little guy!'
-    );
-
 Create a new post.
 
 Expected parameters include:
@@ -681,6 +653,12 @@ Defaults to the current time.
 
 Indicates human language of post primary text content.
 
+    $bsky->createPost(
+        lang     => [ 'en', 'ja' ],
+        reply_to => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
+        text     => 'こんにちは, World!'
+    );
+
 This is expected to be a comma separated string of language codes (e.g. C<en-US,en;q=0.9,fr>).
 
 Bluesky recommends sending the C<Accept-Language> header to get posts in the user's preferred language. See
@@ -690,6 +668,8 @@ L<https://www.iana.org/assignments/language-subtag-registry/language-subtag-regi
 =item C<reply_to>
 
 AT-URL of a post to reply to.
+
+    $bsky->createPost( reply_to => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27', text => 'Exactly!' );
 
 =item C<embed>
 
@@ -703,23 +683,39 @@ Known embed types:
 
 Up to 4 images (path name or raw data).
 
-Set alt text by passing a hash:
+Set alt text by passing a hash.
 
-    [ ..., { alt => 'A person standing outdoors.', image => 'camping.jpg' } ]
+    $bsky->createPost(
+        embed    => { images => ['path/to/my.jpg'] },
+        lang     => 'en',
+        reply_to => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
+        text     => 'I found this image on https://google.com/'
+    );
 
+    $bsky->createPost(
+        embed    => { images => [{ alt => 'Might be a picture of a frog.', image => 'path/to/my.jpg' }] },
+        lang     => 'en',
+        reply_to => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
+        text     => 'I found this image on https://google.com/'
+    );
 
 =item C<url>
 
-A URL. A card (including the URL, the page title, and a description) will be presented in a GUI.
+A card (including the URL, the page title, and a description) will be presented in a GUI.
+
+    $bsky->createPost( embed => { url => 'https://en.wikipedia.org/wiki/Main_Page' }, text => <<'END');
+    This is the link to wikipedia, @atproto.bsky.social. You should check it out.
+    END
 
 =item C<ref>
 
 An AT-URL to link from this post.
 
-
 =item C<video>
 
 A video to be embedded in a Bluesky record (eg, a post).
+
+    $bsky->createPost( embed => { video => 'path/to/cat.mpeg' }, text => 'Loot at this little guy!' );
 
 This might be a single path, raw data, or a hash reference (if you're really into what and how the video is presented).
 

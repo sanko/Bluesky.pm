@@ -191,35 +191,6 @@ Expected parameters include:
 
 ```perl
 $bsky->createPost( text => 'Test. Test. Test.' );
-
-$bsky->createPost(
-    reply_to   => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
-    text       => 'Exactly!'
-);
-
-$bsky->createPost(
-    embed      => { url => 'https://en.wikipedia.org/wiki/Main_Page' },
-    text       => <<'END');
-This is the link to wikipedia, @atproto.bsky.social. You should check it out.
-END
-
-$bsky->createPost(
-    embed      => { images     => ['path/to/my.jpg'] },
-    lang       => 'en',
-    reply_to   => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
-    text       => 'I found this image on https://google.com/'
-);
-
-$bsky->createPost(
-    lang       => ['en', 'ja'],
-    reply_to   => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
-    text       => 'こんにちは, World!'
-);
-
-$bsky->createPost(
-    embed      => { video      => 'path/to/cat.mpeg' },
-    text       => 'Loot at this little guy!'
-);
 ```
 
 Create a new post.
@@ -269,6 +240,14 @@ Expected parameters include:
 
     Indicates human language of post primary text content.
 
+    ```perl
+    $bsky->createPost(
+        lang     => [ 'en', 'ja' ],
+        reply_to => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
+        text     => 'こんにちは, World!'
+    );
+    ```
+
     This is expected to be a comma separated string of language codes (e.g. `en-US,en;q=0.9,fr`).
 
     Bluesky recommends sending the `Accept-Language` header to get posts in the user's preferred language. See
@@ -278,6 +257,10 @@ Expected parameters include:
 - `reply_to`
 
     AT-URL of a post to reply to.
+
+    ```perl
+    $bsky->createPost( reply_to => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27', text => 'Exactly!' );
+    ```
 
 - `embed`
 
@@ -289,15 +272,33 @@ Expected parameters include:
 
         Up to 4 images (path name or raw data).
 
-        Set alt text by passing a hash:
+        Set alt text by passing a hash.
 
         ```perl
-        [ ..., { alt => 'A person standing outdoors.', image => 'camping.jpg' } ]
+        $bsky->createPost(
+            embed    => { images => ['path/to/my.jpg'] },
+            lang     => 'en',
+            reply_to => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
+            text     => 'I found this image on https://google.com/'
+        );
+
+        $bsky->createPost(
+            embed    => { images => [{ alt => 'Might be a picture of a frog.', image => 'path/to/my.jpg' }] },
+            lang     => 'en',
+            reply_to => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27',
+            text     => 'I found this image on https://google.com/'
+        );
         ```
 
     - `url`
 
-        A URL. A card (including the URL, the page title, and a description) will be presented in a GUI.
+        A card (including the URL, the page title, and a description) will be presented in a GUI.
+
+        ```perl
+        $bsky->createPost( embed => { url => 'https://en.wikipedia.org/wiki/Main_Page' }, text => <<'END');
+        This is the link to wikipedia, @atproto.bsky.social. You should check it out.
+        END
+        ```
 
     - `ref`
 
@@ -306,6 +307,10 @@ Expected parameters include:
     - `video`
 
         A video to be embedded in a Bluesky record (eg, a post).
+
+        ```perl
+        $bsky->createPost( embed => { video => 'path/to/cat.mpeg' }, text => 'Loot at this little guy!' );
+        ```
 
         This might be a single path, raw data, or a hash reference (if you're really into what and how the video is presented).
 
