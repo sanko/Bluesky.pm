@@ -78,14 +78,7 @@ package Bluesky 0.01 {
             # embeds
             if ( defined $args{embed} ) {
                 if ( defined $args{embed}{images} ) {
-                    $post{embed} = $self->uploadImages(
-
-                        #~ ( ( builtin::reftype( $args{embed}{images} ) // '' ) eq 'ARRAY' ) ?
-                        @{ $args{embed}{images} }
-
-                        #~ :
-                        #~ $args{embed}{images}
-                    );
+                    $post{embed} = $self->uploadImages( @{ $args{embed}{images} } );
                 }
                 elsif ( defined $args{embed}{video} ) {
                     $post{embed} = $self->uploadVideo( $args{embed}{video} );
@@ -320,11 +313,50 @@ package Bluesky 0.01 {
             }
             my $blob = $self->uploadFile( $vid, $mime );
             $blob || return $blob->throw;
-            {   '$type' => 'app.bsky.embed.video',
+            return {
+                '$type' => 'app.bsky.embed.video',
                 video   => $blob,
                 ( @captions            ? ( captions    => \@captions )   : () ), ( defined $alt ? ( alt => $alt ) : () ),
                 ( defined $aspectRatio ? ( aspectRatio => $aspectRatio ) : () )
             };
+            if (0) {
+
+                # You may upload videos as plain blobs but this endpoint allows you to check on processing status
+                # Testing because HTTP::Tiny does not support multipart
+                # I need to get auth token for new service via 'com.atproto.server.getServiceAuth'
+                my $boundary = join '', map { [ 0 .. 9, 'a' .. '4' ]->[ rand 36 ] } 1 .. 5 + rand(10);
+                my $job      = $at->post(
+                    'https://video.bsky.app/xrpc/app.bsky.video.uploadVideo?did=' . $at->did . '&name=upload.mp4',
+                    {   headers => { 'content-type' => 'multipart/form-data; boundary=' . $boundary },
+                        content =>
+                            qq[--$boundary\x0d\x0aContent-Disposition: form-data; name="file_name"; filename="file_name_1.mp4"\x0d\x0aContent-Type: video/mp4\x0d\x0a$vid\x0d\x0a--$boundary--\x0d\x0a]
+                    }
+                );
+                $job || return $job->throw;
+                for ( 1 .. 30 ) {    # TODO: I need to make this async when At.pm is wrapping Mojo::UA
+                    $job = $at->get( 'app.bsky.video.getJobStatus' => { jobId => $job->{jobId} } );
+                    #~ ddx $job;
+                    $job || return $job->throw;
+                    last if $job->{state} eq 'JOB_STATE_COMPLETED';
+                    sleep 1;
+
+                    #~ $res ? $res->{blob} : $res;
+                }
+
+                #~ ...;
+                #~ ddx $job;
+                return {
+                    '$type' => 'app.bsky.embed.video',
+                    video   => $job->{blob},
+                    ( @captions            ? ( captions    => \@captions )   : () ), ( defined $alt ? ( alt => $alt ) : () ),
+                    ( defined $aspectRatio ? ( aspectRatio => $aspectRatio ) : () )
+                };
+                {   '$type' => 'app.bsky.embed.video',
+                    video   => $job->{blob},
+                    ( @captions            ? ( captions    => \@captions )   : () ), ( defined $alt ? ( alt => $alt ) : () ),
+                    ( defined $aspectRatio ? ( aspectRatio => $aspectRatio ) : () )
+                };
+            }
         }
 
         method getEmbedRef($uri) {
