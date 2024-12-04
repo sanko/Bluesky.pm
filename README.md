@@ -17,7 +17,7 @@ $bsky->createPost( ... );
 You shouldn't need to know the AT protocol in order to get things done so I'm including this sugary wrapper so that
 [At](https://metacpan.org/pod/At) can remain mostly technical.
 
-# Methods
+# Constructor and Session Management
 
 Bluesky.pm is my attempt to make use of Perl's class syntax so this is obviously OO.
 
@@ -37,6 +37,10 @@ Expected parameters include:
 
     This is the app password not the account's password. App passwords are generated at
     [https://bsky.app/settings/app-passwords](https://bsky.app/settings/app-passwords).
+
+# Feed and Content
+
+Methods in this category create, modify, access, and delete content.
 
 ## `getTimeline( [...] )`
 
@@ -385,6 +389,25 @@ Delete a post or ensures it doesn't exist.
 Expected parameters include:
 
 - `uri` - required
+
+# Social Graph
+
+Methods documented in this section deal with relationships between the authorized user and other members of the social
+network.
+
+## `block( ... )`
+
+```
+$bsky->block( 'sankor.bsky.social' );
+```
+
+Blocks a user.
+
+Expected parameters include:
+
+- `identifier` - required
+
+    Handle or DID of the person you'd like to block.
 
 # See Also
 

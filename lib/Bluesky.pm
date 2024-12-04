@@ -104,13 +104,20 @@ package Bluesky 0.19 {
         method uploadBlob( $data, %opts ) { }
 
         # Social graph
-        method getFollows()             { }
-        method getFollowers()           { }
+        method block($actor) {
+            my $profile = $self->getProfile($actor);
+            $profile->{did} // return;
+            $at->post( 'com.atproto.repo.createRecord' =>
+                    { repo => $self->did, collection => 'app.bsky.graph.block', record => { createdAt => $at->now }, subject => $profile->{did} } );
+        }
+        method deleteBlock()            { }
         method follow($did)             { }
         method deleteFollow($followUri) { }
+        method getFollows()             { }
+        method getFollowers()           { }
 
         # Actors
-        method getProfile()             { }
+        method getProfile($actor)       { $at->get( 'app.bsky.actor.getProfile' => { actor => $actor } ) }
         method upsertProfile()          { }
         method getProfiles()            { }
         method getSuggestions()         { }
@@ -410,7 +417,7 @@ Bluesky - Bluesky Client Library in Perl
 You shouldn't need to know the AT protocol in order to get things done so I'm including this sugary wrapper so that
 L<At> can remain mostly technical.
 
-=head1 Methods
+=head1 Constructor and Session Management
 
 Bluesky.pm is my attempt to make use of Perl's class syntax so this is obviously OO.
 
@@ -432,6 +439,10 @@ This is the app password not the account's password. App passwords are generated
 L<https://bsky.app/settings/app-passwords>.
 
 =back
+
+=head1 Feed and Content
+
+Methods in this category create, modify, access, and delete content.
 
 =head2 C<getTimeline( [...] )>
 
@@ -794,6 +805,27 @@ Expected parameters include:
 =over
 
 =item C<uri> - required
+
+=back
+
+=head1 Social Graph
+
+Methods documented in this section deal with relationships between the authorized user and other members of the social
+network.
+
+=head2 C<block( ... )>
+
+    $bsky->block( 'sankor.bsky.social' );
+
+Blocks a user.
+
+Expected parameters include:
+
+=over
+
+=item C<identifier> - required
+
+Handle or DID of the person you'd like to block.
 
 =back
 
