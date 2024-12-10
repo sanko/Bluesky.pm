@@ -11,7 +11,7 @@ package Bluesky 0.19 {
     use URI;
 
     class Bluesky {
-        field $at;
+        field $at : reader;
         field $service : param //= 'https://bsky.social';
         #
         ADJUST { $at = At->new( service => $service ); }
