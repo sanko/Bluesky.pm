@@ -97,7 +97,28 @@ package Bluesky 0.19 {
             $at_uri = At::Protocol::URI->new($at_uri) unless builtin::blessed $at_uri;
             $at->post( 'com.atproto.repo.deleteRecord' => { repo => $at_uri->host, collection => 'app.bsky.feed.post', rkey => $at_uri->rkey } );
         }
-        method like( $uri, $cid )         { }
+
+        method like( $uri, $cid //= () ) {
+            if ( !defined $cid ) {
+                my $post = $at->get( 'app.bsky.feed.getPosts' => { uris => [$uri] } );
+                $post || $post->throw;
+                $cid = $post->{posts}[0]{cid};
+            }
+            $at->post(
+                'com.atproto.repo.createRecord' => {
+                    repo       => $at->did,
+                    collection => 'app.bsky.feed.like',
+                    record     => {
+                        '$type' => 'app.bsky.feed.like',
+                        subject => {                       # com.atproto.repo.strongRef
+                            uri => $uri,
+                            cid => $cid
+                        },
+                        createdAt => $at->now
+                    }
+                }
+            );
+        }
         method deleteLike($likeUri)       { }
         method repost( $uri, $cid )       { }
         method deleteRepost($repostUri)   { }
@@ -807,6 +828,30 @@ Expected parameters include:
 =item C<uri> - required
 
 =back
+
+=head2 C<like( ... )>
+
+    $bsky->like( 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lcdwvquo7y25' );
+
+    $bsky->like( 'at://did:plc:totallymadeupgarbagehere/app.bsky.feed.post/randomexample', 'fu82qrfrf829crw89rfpuwcfiosdfcu8239wcrusiofcv2epcuy8r9jkfsl' );
+
+Like a post publically.
+
+Expected parameters include:
+
+=over
+
+=item C<uri> - required
+
+The AT-URI of the post.
+
+=item C<cid>
+
+If undefined, the post is fetched to gather this for you.
+
+=back
+
+On success, a record is returned.
 
 =head1 Social Graph
 

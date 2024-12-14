@@ -166,7 +166,7 @@ subtest auth => sub {
             field threadgate => E();
             end;
         }, 'getPostThread( ... )';
-        is my $post = $bsky->getPost('at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3l6oveex3ii2l'), hash {
+        is my $stable_post = $bsky->getPost('at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3l6oveex3ii2l'), hash {
             field author      => D();
             field cid         => D();
             field embed       => E();
@@ -202,8 +202,9 @@ subtest auth => sub {
 
         #~ ddx $likes;
         #~ p my $ys   = $bsky->getLikes( uri => 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3l6oveex3ii2l' );
+        my $post;
         subtest createPost => sub {
-            is my $post = $bsky->createPost( text => 'Post is for #testing only. @atproto.bsky.social https://wikipedia.com/' ), hash {
+            is $post = $bsky->createPost( text => 'Post is for #testing only. @atproto.bsky.social https://wikipedia.com/' ), hash {
                 field cid    => D();
                 field commit => hash {
                     field cid => D();
@@ -257,7 +258,17 @@ END
                 end;
                 }, 'reply with image';
             $image_reply->throw unless $image_reply;
-        }
+        };
+        subtest like => sub {
+            skip 1 unless $post;
+            is my $like = $bsky->like( $post->{uri}, $post->{cid} ), hash {
+                field cid              => E();
+                field commit           => hash { field cid => D(); field rev => D(); etc };
+                field uri              => D();
+                field validationStatus => D();
+                end
+            }, 'like( ... )';
+        };
     };
 };
 if (0) {

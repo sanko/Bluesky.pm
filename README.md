@@ -390,6 +390,28 @@ Expected parameters include:
 
 - `uri` - required
 
+## `like( ... )`
+
+```
+$bsky->like( 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lcdwvquo7y25' );
+
+$bsky->like( 'at://did:plc:totallymadeupgarbagehere/app.bsky.feed.post/randomexample', 'fu82qrfrf829crw89rfpuwcfiosdfcu8239wcrusiofcv2epcuy8r9jkfsl' );
+```
+
+Like a post publically.
+
+Expected parameters include:
+
+- `uri` - required
+
+    The AT-URI of the post.
+
+- `cid`
+
+    If undefined, the post is fetched to gather this for you.
+
+On success, a record is returned.
+
 # Social Graph
 
 Methods documented in this section deal with relationships between the authorized user and other members of the social
