@@ -27,12 +27,12 @@ package Bluesky 0.19 {
         method getPostThread(%args) { $at->get( 'app.bsky.feed.getPostThread' => \%args ); }
 
         method getPost($uri) {
-            my $res = $at->get( 'app.bsky.feed.getPosts' => { uris => [$uri] } );
+            my $res = $at->get( 'app.bsky.feed.getPosts' => { uris => [ builtin::blessed $uri ? $uri->as_string : $uri ] } );
             $res ? $res->{posts}[0] // () : $res;
         }
 
         method getPosts(@uris) {
-            my $res = $at->get( 'app.bsky.feed.getPosts' => { uris => \@uris } );
+            my $res = $at->get( 'app.bsky.feed.getPosts' => { uris => [ map { builtin::blessed $_ ? $_->as_string : $_ } @uris ] } );
             $res ? $res->{posts} // () : $res;
         }
         method getLikes(%args) { my $res = $at->get( 'app.bsky.feed.getLikes' => \%args ); }
@@ -119,7 +119,15 @@ package Bluesky 0.19 {
                 }
             );
         }
-        method deleteLike($likeUri)       { }
+
+        method deleteLike($url) {
+            $url = At::Protocol::URI->new($url) unless builtin::blessed $url;
+            if ( $url->collection eq 'app.bsky.feed.post' ) {
+                my $post = $self->getPost($url);
+                $url = $post->{viewer}{like} // return;
+            }
+            $at->post( 'com.atproto.repo.deleteRecord' => { repo => $at->did, collection => 'app.bsky.feed.like', rkey => $url->rkey } );
+        }
         method repost( $uri, $cid )       { }
         method deleteRepost($repostUri)   { }
         method uploadBlob( $data, %opts ) { }
@@ -852,6 +860,26 @@ If undefined, the post is fetched to gather this for you.
 =back
 
 On success, a record is returned.
+
+=head2 C<deleteLike( ... )>
+
+    $bsky->deleteLike( 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lcdwvquo7y25' );
+
+    $bsky->deleteLike( 'at://did:plc:totallymadeupgarbagehere/app.bsky.feed.like/randomexample' );
+
+Remove a like record.
+
+Expected parameters include:
+
+=over
+
+=item C<uri> - required
+
+The AT-URI of the post or the like record itself.
+
+=back
+
+On success, commit info is returned.
 
 =head1 Social Graph
 

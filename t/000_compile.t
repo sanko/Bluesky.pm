@@ -259,15 +259,27 @@ END
                 }, 'reply with image';
             $image_reply->throw unless $image_reply;
         };
+        my $like;
         subtest like => sub {
             skip 1 unless $post;
-            is my $like = $bsky->like( $post->{uri}, $post->{cid} ), hash {
+            is $like = $bsky->like( $post->{uri}, $post->{cid} ), hash {
                 field cid              => E();
                 field commit           => hash { field cid => D(); field rev => D(); etc };
                 field uri              => D();
                 field validationStatus => D();
                 end
             }, 'like( ... )';
+        };
+        subtest deleteLike => sub {
+            skip 1 unless $like;
+            is my $unlike = $bsky->deleteLike( $like->{uri} ), hash {
+                field commit => hash {
+                    field cid => E();
+                    field rev => D();
+                    end
+                };
+                end
+            }, 'deleteLike( ... )';
         };
     };
 };
