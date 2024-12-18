@@ -282,6 +282,22 @@ END
             }, 'deleteLike( ... )';
         };
     };
+    subtest 'Social graph' => sub {
+        $login || skip_all "$login";
+        subtest getBlocks => sub {
+            my $blocks = $bsky->getBlocks();
+            skip_all 'failed to gather blocks: ' . $blocks->message unless $blocks;
+            is $blocks, bag {
+                all_items hash {
+                    field createdAt => D();
+                    field did       => E();
+                    field handle    => E();
+                    etc;
+                };
+                end
+            }, 'list of blocks';
+        };
+    }
 };
 if (0) {
 

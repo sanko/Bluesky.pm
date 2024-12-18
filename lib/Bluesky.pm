@@ -139,6 +139,11 @@ package Bluesky 0.19 {
             $at->post( 'com.atproto.repo.createRecord' =>
                     { repo => $self->did, collection => 'app.bsky.graph.block', record => { createdAt => $at->now }, subject => $profile->{did} } );
         }
+
+        method getBlocks(%args) {
+            my $res = $at->get( 'app.bsky.graph.getBlocks' => \%args );
+            $res ? $res->{blocks} : $res;
+        }
         method deleteBlock()            { }
         method follow($did)             { }
         method deleteFollow($followUri) { }
@@ -901,6 +906,34 @@ Expected parameters include:
 Handle or DID of the person you'd like to block.
 
 =back
+
+=head2 C<getBlocks( ... )>
+
+    $bsky->getBlocks( );
+
+Enumerates which accounts the requesting account is currently blocking.
+
+Requires auth.
+
+Expected parameters include:
+
+=over
+
+=item C<uri>
+
+AT-URI of the subject (eg, a post record).
+
+=item C<limit>
+
+Integer.
+
+Default: 50, Minimum: 1, Maximum: 100.
+
+=item C<cursor>
+
+=back
+
+Returns a list of actor profile views on success.
 
 =head1 See Also
 

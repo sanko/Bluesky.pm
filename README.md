@@ -412,6 +412,24 @@ Expected parameters include:
 
 On success, a record is returned.
 
+## `deleteLike( ... )`
+
+```
+$bsky->deleteLike( 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lcdwvquo7y25' );
+
+$bsky->deleteLike( 'at://did:plc:totallymadeupgarbagehere/app.bsky.feed.like/randomexample' );
+```
+
+Remove a like record.
+
+Expected parameters include:
+
+- `uri` - required
+
+    The AT-URI of the post or the like record itself.
+
+On success, commit info is returned.
+
 # Social Graph
 
 Methods documented in this section deal with relationships between the authorized user and other members of the social
@@ -430,6 +448,32 @@ Expected parameters include:
 - `identifier` - required
 
     Handle or DID of the person you'd like to block.
+
+## `getBlocks( ... )`
+
+```
+$bsky->getBlocks( );
+```
+
+Enumerates which accounts the requesting account is currently blocking.
+
+Requires auth.
+
+Expected parameters include:
+
+- `uri`
+
+    AT-URI of the subject (eg, a post record).
+
+- `limit`
+
+    Integer.
+
+    Default: 50, Minimum: 1, Maximum: 100.
+
+- `cursor`
+
+Returns a list of actor profile views on success.
 
 # See Also
 
