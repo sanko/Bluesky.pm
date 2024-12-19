@@ -137,7 +137,7 @@ package Bluesky 0.19 {
             my $profile = $self->getProfile($actor);
             $profile->{did} // return;
             $at->post( 'com.atproto.repo.createRecord' =>
-                    { repo => $self->did, collection => 'app.bsky.graph.block', record => { createdAt => $at->now }, subject => $profile->{did} } );
+                    { repo => $self->did, collection => 'app.bsky.graph.block', record => { createdAt => $at->now, subject => $profile->{did} } } );
         }
 
         method getBlocks(%args) {
