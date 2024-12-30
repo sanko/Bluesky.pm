@@ -151,6 +151,29 @@ subtest auth => sub {
     };
     subtest 'Feeds and content' => sub {
         $login || skip_all "$login";
+        is my $tt = $bsky->getTrendingTopics(), hash {
+            field suggested => bag {
+                all_items hash {
+                    field description => E();
+                    field displayName => E();
+                    field link        => D();
+                    field topic       => D();
+                    end;
+                };
+                end
+            };
+            field topics => bag {
+                all_items hash {
+                    field description => E();
+                    field displayName => E();
+                    field link        => D();
+                    field topic       => D();
+                    end;
+                };
+                end
+            };
+            end
+        }, 'getTrendingTopics( ... )';
         is my $timeline = $bsky->getTimeline(), hash {
             field cursor => D();
             field feed   => D();    # Feed items are subject to change

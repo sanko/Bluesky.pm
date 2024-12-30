@@ -22,9 +22,10 @@ package Bluesky 0.19 {
         method did() { $at->did }
 
         # Feeds and content
-        method getTimeline(%args)   { $at->get( 'app.bsky.feed.getTimeline'   => \%args ); }
-        method getAuthorFeed(%args) { $at->get( 'app.bsky.feed.getAuthorFeed' => \%args ); }
-        method getPostThread(%args) { $at->get( 'app.bsky.feed.getPostThread' => \%args ); }
+        method getTrendingTopics(%args) { $at->get( 'app.bsky.unspecced.getTrendingTopics' => \%args ); }
+        method getTimeline(%args)       { $at->get( 'app.bsky.feed.getTimeline'            => \%args ); }
+        method getAuthorFeed(%args)     { $at->get( 'app.bsky.feed.getAuthorFeed'          => \%args ); }
+        method getPostThread(%args)     { $at->get( 'app.bsky.feed.getPostThread'          => \%args ); }
 
         method getPost($uri) {
             my $res = $at->get( 'app.bsky.feed.getPosts' => { uris => [ builtin::blessed $uri ? $uri->as_string : $uri ] } );
@@ -477,6 +478,29 @@ L<https://bsky.app/settings/app-passwords>.
 =head1 Feed and Content
 
 Methods in this category create, modify, access, and delete content.
+
+=head2 C<getTrendingTopics( [...] )>
+
+    $bsky->getTrendingTopics( );
+
+Get a list of trending topics.
+
+Expected parameters include:
+
+=over
+
+=item C<viewer>
+
+DID of the account making the request (not included for public/unauthenticated queries). Used to boost followed
+accounts in ranking.
+
+=item C<limit>
+
+Integer.
+
+Default: C<10>, Minimum: C<1>, Maximum: C<25>.
+
+=back
 
 =head2 C<getTimeline( [...] )>
 
