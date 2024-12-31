@@ -33,6 +33,10 @@ temp/
 t/dev/
 
 eg/*.pl
+eg/*.jpg
+eg/*.py
+eg/*.mp4
+eg/*.vtt
 eg/lib/*.pm
 
 *.session
