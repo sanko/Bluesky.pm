@@ -42,6 +42,27 @@ Expected parameters include:
 
 Methods in this category create, modify, access, and delete content.
 
+## `getTrendingTopics( [...] )`
+
+```
+$bsky->getTrendingTopics( );
+```
+
+Get a list of trending topics.
+
+Expected parameters include:
+
+- `viewer`
+
+    DID of the account making the request (not included for public/unauthenticated queries). Used to boost followed
+    accounts in ranking.
+
+- `limit`
+
+    Integer.
+
+    Default: `10`, Minimum: `1`, Maximum: `25`.
+
 ## `getTimeline( [...] )`
 
 ```
