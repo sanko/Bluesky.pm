@@ -967,6 +967,12 @@ L<App::bsky> - Bluesky client on the command line
 
 L<https://docs.bsky.app/docs/api/>
 
+=head1 Perl Starter Pack
+
+I've created a starter pack of Perl folks on Bluesky.
+
+Follow it at L<https://bsky.app/starter-pack/sankorobinson.com/3lk3xd5utq52s> and get in touch to have yourself added.
+
 =head1 LICENSE
 
 Copyright (C) Sanko Robinson.

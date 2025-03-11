@@ -504,6 +504,12 @@ Returns a list of actor profile views on success.
 
 [https://docs.bsky.app/docs/api/](https://docs.bsky.app/docs/api/)
 
+# Perl Starter Pack
+
+I've created a starter pack of Perl folks on Bluesky.
+
+Follow it at [https://bsky.app/starter-pack/sankorobinson.com/3lk3xd5utq52s](https://bsky.app/starter-pack/sankorobinson.com/3lk3xd5utq52s) and get in touch to have yourself added.
+
 # LICENSE
 
 Copyright (C) Sanko Robinson.
