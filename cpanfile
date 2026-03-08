@@ -1,9 +1,10 @@
-requires 'At', '0.19';
+requires 'At', '1.3';
 requires 'HTTP::Tiny';
 requires 'Mozilla::CA';
 requires 'Path::Tiny';
 requires 'URI';
-requires 'perl', 'v5.40.0';
+requires 'URI::QueryParam';
+requires 'perl', 'v5.42.0';
 recommends 'Mojo::UserAgent';
 on configure => sub {
     requires 'CPAN::Meta';

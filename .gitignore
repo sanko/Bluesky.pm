@@ -41,3 +41,7 @@ eg/lib/*.pm
 
 *.session
 t/test_auth.json
+
+session.json
+
+MANIFEST

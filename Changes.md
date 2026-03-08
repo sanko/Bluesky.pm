@@ -1,0 +1,49 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- Added `oauth_helper` method to provide a streamlined, interactive OAuth flow with an optional built-in redirect listener.
+- Implemented functional Chat (Direct Messages) support via PDS proxying (`atproto-proxy`).
+- Added robust service aware routing in `_at_for` to handle repo, feed, and chat lexicons transparently.
+
+### Fixed
+- Fixed `oauth_helper` to use standard `Mojolicious` objects instead of `Mojolicious::Lite`, resolving "Modification of a read-only value" errors.
+- Corrected OAuth scopes to use `transition:generic` and `transition:chat.bsky` for reliable chat authorization.
+- Fixed sender handle display in `bsky_chat.pl` by mapping member DIDs to handles.
+
+### Added
+- Implemented missing methods: `repost`, `deleteRepost`, `uploadBlob`, `deleteBlock`, `follow`, `deleteFollow`, `getFollows`, `getFollowers`, `getRepostedBy`.
+- Support for Bookmarks: `getBookmarks`, `createBookmark`, `deleteBookmark`.
+- Feed Generator methods: `getFeed`, `getFeedSkeleton`, `getFeedGenerator`, `getFeedGenerators`, `getActorFeeds`, `getSuggestedFeeds`, `getPopularFeedGenerators`, `getTrends`, `describeFeedGenerator`.
+- Social Graph features: `getRelationships`, `getMutes`, `muteThread`, `unmuteThread`, `getLists`, `getList`, `getKnownFollowers`, `getSuggestedFollowsByActor`.
+- Actor features: `upsertProfile`, `getProfiles`, `getSuggestions`, `getSuggestionsSkeleton`, `searchActors`, `searchActorsTypeahead`, `mute`, `unmute`, `muteModList`, `unmuteModList`, `blockModList`, `unblockModList`, `getPreferences`, `putPreferences`.
+- Notification features: `listNotifications`, `countUnreadNotifications`, `updateSeenNotifications`, `putNotificationPreferences`.
+- Identity features: `resolveHandle`, `updateHandle`.
+- Starter Pack support: `getStarterPack`, `getStarterPacks`, `getActorStarterPacks`.
+- Drafts support: `getDrafts`, `createDraft`, `updateDraft`, `deleteDraft`.
+- Chat (Direct Messages) support: `listConvos`, `getConvo`, `getConvoForMembers`, `getMessages`, `sendMessage`, `sendMessageToHandle`, `updateRead`, `muteConvo`, `unmuteConvo`.
+- Video features: `getVideoUploadLimits`, `getVideoJobStatus`.
+- Contact features: `importContacts`, `getContactMatches`.
+- Miscellaneous methods: `describeServer`, `listRecords`, `getLabelerServices`.
+- OAuth and Firehose wrapper methods.
+- New examples (Bluesky auth, chat, firehose, etc.)
+- Refactored `uploadFile` to use `HTTP::Tiny` directly, bypassing bugs in the underlying `At` module's UserAgent.
+
+## [0.20] - 2024-12-31
+
+### Added
+- List, create, and delete records to block actors/accounts by name.
+- Allow posts to be liked by their AT-URI.
+- Allow likes to be deleted.
+- Wrapping Bluesky's new `*.getTrendingTopics` lexicon.
+
+## [0.19] - 2024-12-03
+
+### Changed
+- Split from At.pm.
