@@ -12,7 +12,7 @@ my $bsky = Bluesky->new();
 $bsky->oauth_helper(
     handle => 'user.bsky.social',
     listen => 1, # Automatically catch the redirect
-    on_success => sub { say "Logged in!" }
+    on_success => sub { say 'Logged in!' }
 );
 
 # Posting
@@ -21,7 +21,7 @@ $bsky->createPost( text => 'Hello from Perl!' );
 # Streaming
 my $fh = $bsky->firehose(sub ( $header, $body, $err ) {
     return warn $err if $err;
-    say "New event: " . $header->{t};
+    say 'New event: ' . $header->{t};
 });
 $fh->start();
 ```
@@ -82,7 +82,7 @@ $bsky->oauth_helper(
     handle     => 'user.bsky.social',
     listen     => 1,
     on_success => sub ($self) {
-        say "Authenticated as " . $self->did;
+        say 'Authenticated as ' . $self->did;
     }
 );
 ```
@@ -1063,7 +1063,7 @@ $bsky->getConvo( $convoId );
 
 Get a detailed view of a conversation.
 
-## `getConvoForMembers( actors =` \[ ... \] )>
+## `getConvoForMembers( actors => [ ... ] )`
 
 ```perl
 $bsky->getConvoForMembers( actors => [ 'did:plc:...' ] );
@@ -1071,7 +1071,7 @@ $bsky->getConvoForMembers( actors => [ 'did:plc:...' ] );
 
 Get or create a conversation for a list of members.
 
-## `getMessages( convoId =` ..., \[...\] )>
+## `getMessages( convoId => ..., [...] )`
 
 ```perl
 $bsky->getMessages( convoId => $convoId );
@@ -1079,7 +1079,7 @@ $bsky->getMessages( convoId => $convoId );
 
 Get messages in a conversation.
 
-## `sendMessage( $convoId, { text =` ... } )>
+## `sendMessage( $convoId, { text => ... } )`
 
 ```perl
 $bsky->sendMessage( $convoId, { text => 'Hello!' } );

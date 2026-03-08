@@ -1,7 +1,7 @@
 use Test2::V0 '!subtest';
 use Test2::Util::Importer 'Test2::Tools::Subtest' => ( subtest_streamed => { -as => 'subtest' } );
 use Test2::Plugin::UTF8;
-use JSON::Tiny qw[decode_json];
+use JSON::PP   qw[decode_json];
 use Path::Tiny qw[path];
 use HTTP::Tiny;
 use utf8;

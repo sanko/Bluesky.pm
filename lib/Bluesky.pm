@@ -1798,19 +1798,19 @@ Enumerates conversations for the authorized user.
 
 Get a detailed view of a conversation.
 
-=head2 C<getConvoForMembers( actors => [ ... ] )>
+=head2 C<getConvoForMembers( actors =E<gt> [ ... ] )>
 
     $bsky->getConvoForMembers( actors => [ 'did:plc:...' ] );
 
 Get or create a conversation for a list of members.
 
-=head2 C<getMessages( convoId => ..., [...] )>
+=head2 C<getMessages( convoId =E<gt> ..., [...] )>
 
     $bsky->getMessages( convoId => $convoId );
 
 Get messages in a conversation.
 
-=head2 C<sendMessage( $convoId, { text => ... } )>
+=head2 C<sendMessage( $convoId, { text =E<gt> ... } )>
 
     $bsky->sendMessage( $convoId, { text => 'Hello!' } );
 
