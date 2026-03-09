@@ -498,6 +498,26 @@ Expected parameters include:
     $bsky->createPost( reply_to => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27', text => 'Exactly!' );
     ```
 
+- `reply_gate`
+
+    Arrayref of rules to restrict who can reply to this post.
+
+    Supported rules:
+
+    - `mention` - Only users mentioned in the post can reply.
+    - `following` - Only users the author follows can reply.
+    - `list` - Only users in a specific moderation list can reply (requires `reply_gate_list`).
+
+    Example:
+
+    ```perl
+    $bsky->createPost( text => 'Private post', reply_gate => ['following'] );
+    ```
+
+- `reply_gate_list`
+
+    The AT-URI of a moderation list to use with the `list` rule in `reply_gate`.
+
 - `embed`
 
     Bluesky allows for posts to contain embedded data.
@@ -781,6 +801,14 @@ $bsky->getFollowers( 'sankorobinson.com' );
 
 Enumerates who is following an account.
 
+## `getKnownFollowers( ... )`
+
+```
+$bsky->getKnownFollowers( 'sankorobinson.com' );
+```
+
+Enumerates followers of an account that the authorized user also follows (mutuals).
+
 ## `getRelationships( ... )`
 
 ```perl
@@ -970,6 +998,34 @@ $bsky->unblockModList( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.lis
 ```
 
 Unblocks a moderation list.
+
+# Moderation
+
+## `mute( ... )`
+
+```
+$bsky->mute( 'sankorobinson.com' );
+```
+
+Mutes an actor.
+
+## `unmute( ... )`
+
+```
+$bsky->unmute( 'sankorobinson.com' );
+```
+
+Unmutes an actor.
+
+## `report( $subject, $reason_type, [ $reason ] )`
+
+Submits a moderation report.
+
+Expected parameters:
+
+- `$subject` - The AT-URI or DID being reported.
+- `$reason_type` - Lexicon-defined reason (e.g., `com.atproto.moderation.defs#reasonSpam`).
+- `$reason` - Optional free-text description.
 
 # Notifications
 

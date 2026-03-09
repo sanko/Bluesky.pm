@@ -25,24 +25,24 @@ package Bluesky 1.00 {
                 # Chat requests are proxied via the PDS.
                 # Service ID fragment (#bsky_chat) is required.
                 say '[DEBUG] [Bluesky] Proxying chat request...' if $ENV{DEBUG};
-                $at->http->at_protocol_proxy('did:web:api.bsky.chat#bsky_chat');
+                $self->at->http->at_protocol_proxy('did:web:api.bsky.chat#bsky_chat');
                 return $at;
             }
 
             # Ensure proxy is NOT used for standard repo/feed calls
-            $at->http->at_protocol_proxy(undef);
+            $self->at->http->at_protocol_proxy(undef);
             return $at;
         }
-        method login ( $identifier, $password ) { $at->login( $identifier, $password ); }
+        method login ( $identifier, $password ) { $self->at->login( $identifier, $password ); }
 
         method resume( $accessJwt, $refreshJwt, $token_type = 'Bearer', $dpop_key_jwk = (), $client_id = (), $handle = (), $pds = (), $scope = () ) {
-            $at->resume( $accessJwt, $refreshJwt, $token_type, $dpop_key_jwk, $client_id, $handle, $pds, $scope );
+            $self->at->resume( $accessJwt, $refreshJwt, $token_type, $dpop_key_jwk, $client_id, $handle, $pds, $scope );
         }
 
         method oauth_start( $handle, $client_id, $redirect_uri, $scope = 'atproto' ) {
-            return $at->oauth_start( $handle, $client_id, $redirect_uri, $scope );
+            return $self->at->oauth_start( $handle, $client_id, $redirect_uri, $scope );
         }
-        method oauth_callback( $code, $state ) { return $at->oauth_callback( $code, $state ); }
+        method oauth_callback( $code, $state ) { return $self->at->oauth_callback( $code, $state ); }
 
         method oauth_helper (%args) {
             my $handle = $args{handle} or die 'Handle is required for oauth_helper';
@@ -132,10 +132,10 @@ package Bluesky 1.00 {
                 die "Could not find code and state in the provided URL.\n";
             }
         }
-        method firehose( $callback, $url = () ) { $at->firehose( $callback, $url ); }
-        method session ()                       { $at->session; }
+        method firehose( $callback, $url = () ) { $self->at->firehose( $callback, $url ); }
+        method session ()                       { $self->at->session; }
         #
-        method did() { $at->did }
+        method did() { $self->at->did }
 
         # Feeds and content
         method getTrendingTopics(%args) {
@@ -232,7 +232,7 @@ package Bluesky 1.00 {
                 $post || $post->throw;
                 $cid = $post->{posts}[0]{cid};
             }
-            $at->create_record( 'app.bsky.feed.repost', { subject => { uri => $uri, cid => $cid }, createdAt => $at->_now->to_string } );
+            $self->at->create_record( 'app.bsky.feed.repost', { subject => { uri => $uri, cid => $cid }, createdAt => $self->at->_now->to_string } );
         }
 
         method deleteRepost($url) {
@@ -241,9 +241,9 @@ package Bluesky 1.00 {
                 my $post = $self->getPost($url);
                 $url = $post->{viewer}{repost} // return;
             }
-            $at->delete_record( 'app.bsky.feed.repost', $url->rkey );
+            $self->at->delete_record( 'app.bsky.feed.repost', $url->rkey );
         }
-        method uploadBlob( $data, %opts ) { $at->upload_blob( $data, $opts{mime_type} // () ) }
+        method uploadBlob( $data, %opts ) { $self->at->upload_blob( $data, $opts{mime_type} // () ) }
 
         method createPost(%args) {
 
@@ -253,7 +253,7 @@ package Bluesky 1.00 {
             my %post = (    # these are the required fields which every post must include
                 '$type'   => 'app.bsky.feed.post',
                 text      => $args{text}      // '',
-                createdAt => $args{timestamp} // $at->_now->to_string    # trailing "Z" is preferred over "+00:00"
+                createdAt => $args{timestamp} // $self->at->_now->to_string    # trailing "Z" is preferred over "+00:00"
             );
 
             # indicate included languages (optional)
@@ -297,28 +297,48 @@ package Bluesky 1.00 {
                     $post{embed} = $self->getEmbedRef( $args{embed}{ref} );
                 }
             }
-            $at->create_record( 'app.bsky.feed.post', \%post );
+            my $res = $self->at->create_record( 'app.bsky.feed.post', \%post );
+
+            # If reply_gate is requested, create a threadgate record
+            if ( $res && $res->{uri} && $args{reply_gate} ) {
+                my $post_uri = At::Protocol::URI->new( $res->{uri} );
+                my @allow;
+                if ( ref $args{reply_gate} eq 'ARRAY' ) {
+                    for my $type ( @{ $args{reply_gate} } ) {
+                        if    ( $type eq 'mention' )   { push @allow, { '$type' => 'app.bsky.feed.threadgate#mentionRule' }; }
+                        elsif ( $type eq 'following' ) { push @allow, { '$type' => 'app.bsky.feed.threadgate#followingRule' }; }
+                        elsif ( $type eq 'list' ) { push @allow, { '$type' => 'app.bsky.feed.threadgate#listRule', list => $args{reply_gate_list} }; }
+                    }
+                }
+                $self->at->create_record( 'app.bsky.feed.threadgate',
+                    { post => $post_uri->as_string, allow => \@allow, createdAt => $self->at->_now->to_string, },
+                    $post_uri->rkey );    # Must match post rkey
+            }
+            return $res;
         }
 
         method deletePost($at_uri) {
             $at_uri = At::Protocol::URI->new($at_uri) unless builtin::blessed $at_uri;
-            $at->delete_record( 'app.bsky.feed.post', $at_uri->rkey );
+            $self->at->delete_record( 'app.bsky.feed.post', $at_uri->rkey );
+
+            # Automatically try to delete threadgate too
+            $self->at->delete_record( 'app.bsky.feed.threadgate', $at_uri->rkey );
         }
 
         method like( $uri, $cid //= () ) {
             if ( !defined $cid ) {
-                my $post = $at->get( 'app.bsky.feed.getPosts' => { uris => [$uri] } );
+                my $post = $self->_at_for('app.bsky.feed.getPosts')->get( 'app.bsky.feed.getPosts' => { uris => [$uri] } );
                 $post || $post->throw;
                 $cid = $post->{posts}[0]{cid};
             }
-            $at->create_record(
+            $self->at->create_record(
                 'app.bsky.feed.like',
                 {   '$type' => 'app.bsky.feed.like',
                     subject => {                       # com.atproto.repo.strongRef
                         uri => $uri,
                         cid => $cid
                     },
-                    createdAt => $at->_now->to_string
+                    createdAt => $self->at->_now->to_string
                 }
             );
         }
@@ -329,173 +349,196 @@ package Bluesky 1.00 {
                 my $post = $self->getPost($url);
                 $url = $post->{viewer}{like} // return;
             }
-            $at->delete_record( 'app.bsky.feed.like', $url->rkey );
+            $self->at->delete_record( 'app.bsky.feed.like', $url->rkey );
         }
 
         # Social graph
         method block($actor) {
             my $profile = $self->getProfile($actor);
             $profile->{did} // return;
-            $at->create_record( 'app.bsky.graph.block', { createdAt => $at->_now->to_string, subject => $profile->{did} } );
+            $self->at->create_record( 'app.bsky.graph.block', { createdAt => $self->at->_now->to_string, subject => $profile->{did} } );
         }
 
         method getBlocks(%args) {
-            my $res = $at->get( 'app.bsky.graph.getBlocks' => \%args );
+            my $res = $self->_at_for('app.bsky.graph.getBlocks')->get( 'app.bsky.graph.getBlocks' => \%args );
             $res ? $res->{blocks} : $res;
         }
 
         method deleteBlock($url) {
             $url = At::Protocol::URI->new($url) unless builtin::blessed $url;
-            $at->delete_record( 'app.bsky.graph.block', $url->rkey );
+            $self->at->delete_record( 'app.bsky.graph.block', $url->rkey );
         }
 
         method follow($subject) {
             my $profile = $self->getProfile($subject);
             $profile->{did} // return;
-            $at->create_record( 'app.bsky.graph.follow',
-                { '$type' => 'app.bsky.graph.follow', subject => $profile->{did}, createdAt => $at->_now->to_string } );
+            $self->at->create_record( 'app.bsky.graph.follow',
+                { '$type' => 'app.bsky.graph.follow', subject => $profile->{did}, createdAt => $self->at->_now->to_string } );
         }
 
         method deleteFollow($url) {
             $url = At::Protocol::URI->new($url) unless builtin::blessed $url;
-            $at->delete_record( 'app.bsky.graph.follow', $url->rkey );
+            $self->at->delete_record( 'app.bsky.graph.follow', $url->rkey );
         }
 
         method getFollows( $actor, %args ) {
-            my $res = $at->get( 'app.bsky.graph.getFollows' => { actor => $actor, %args } );
+            my $res = $self->_at_for('app.bsky.graph.getFollows')->get( 'app.bsky.graph.getFollows' => { actor => $actor, %args } );
             $res ? $res->{follows} : $res;
         }
 
         method getFollowers( $actor, %args ) {
-            my $res = $at->get( 'app.bsky.graph.getFollowers' => { actor => $actor, %args } );
+            my $res = $self->_at_for('app.bsky.graph.getFollowers')->get( 'app.bsky.graph.getFollowers' => { actor => $actor, %args } );
+            $res ? $res->{followers} : $res;
+        }
+
+        method getKnownFollowers( $actor, %args ) {
+            my $res = $self->_at_for('app.bsky.graph.getKnownFollowers')->get( 'app.bsky.graph.getKnownFollowers' => { actor => $actor, %args } );
             $res ? $res->{followers} : $res;
         }
 
         method getRelationships(%args) {
-            $args{actor} //= $at->did;
+            $args{actor} //= $self->at->did;
             if ( exists $args{actors} && !exists $args{others} ) {
                 $args{others} = delete $args{actors};
             }
-            my $res = $at->get( 'app.bsky.graph.getRelationships' => \%args );
+            my $res = $self->_at_for('app.bsky.graph.getRelationships')->get( 'app.bsky.graph.getRelationships' => \%args );
             $res ? $res->{relationships} : $res;
         }
 
         method getMutes(%args) {
-            my $res = $at->get( 'app.bsky.graph.getMutes' => \%args );
+            my $res = $self->_at_for('app.bsky.graph.getMutes')->get( 'app.bsky.graph.getMutes' => \%args );
             $res ? $res->{mutes} // () : $res;
         }
-        method muteThread($uri)   { $at->post( 'app.bsky.graph.muteThread'   => { root => $uri } ) }
-        method unmuteThread($uri) { $at->post( 'app.bsky.graph.unmuteThread' => { root => $uri } ) }
+        method muteThread($uri)   { $self->_at_for('app.bsky.graph.muteThread')->post( 'app.bsky.graph.muteThread' => { root => $uri } ) }
+        method unmuteThread($uri) { $self->_at_for('app.bsky.graph.unmuteThread')->post( 'app.bsky.graph.unmuteThread' => { root => $uri } ) }
 
         method getLists( $actor, %args ) {
-            my $res = $at->get( 'app.bsky.graph.getLists' => { actor => $actor, %args } );
+            my $res = $self->_at_for('app.bsky.graph.getLists')->get( 'app.bsky.graph.getLists' => { actor => $actor, %args } );
             $res ? $res->{lists} // () : $res;
         }
 
         method getList( $list, %args ) {
-            my $res = $at->get( 'app.bsky.graph.getList' => { list => $list, %args } );
+            my $res = $self->_at_for('app.bsky.graph.getList')->get( 'app.bsky.graph.getList' => { list => $list, %args } );
             $res ? $res->{items} // () : $res;
         }
-        method getStarterPack($uri) { $at->get( 'app.bsky.graph.getStarterPack' => { starterPack => $uri } ) }
+
+        method getStarterPack($uri) {
+            $self->_at_for('app.bsky.graph.getStarterPack')->get( 'app.bsky.graph.getStarterPack' => { starterPack => $uri } );
+        }
 
         method getStarterPacks(@uris) {
-            my $res = $at->get( 'app.bsky.graph.getStarterPacks' => { uris => \@uris } );
+            my $res = $self->_at_for('app.bsky.graph.getStarterPacks')->get( 'app.bsky.graph.getStarterPacks' => { uris => \@uris } );
             $res ? $res->{starterPacks} // () : $res;
         }
 
         method getActorStarterPacks( $actor, %args ) {
-            my $res = $at->get( 'app.bsky.graph.getActorStarterPacks' => { actor => $actor, %args } );
+            my $res
+                = $self->_at_for('app.bsky.graph.getActorStarterPacks')->get( 'app.bsky.graph.getActorStarterPacks' => { actor => $actor, %args } );
             $res ? $res->{starterPacks} // () : $res;
         }
 
         # Actors
-        method getProfile($actor) { $at->get( 'app.bsky.actor.getProfile' => { actor => $actor } ) }
+        method getProfile($actor) { $self->_at_for('app.bsky.actor.getProfile')->get( 'app.bsky.actor.getProfile' => { actor => $actor } ) }
 
         method getPreferences() {
-            my $res = $at->get('app.bsky.actor.getPreferences');
+            my $res = $self->_at_for('app.bsky.actor.getPreferences')->get('app.bsky.actor.getPreferences');
             $res ? $res->{preferences} : $res;
         }
 
         method putPreferences($preferences) {
-            $at->post( 'app.bsky.actor.putPreferences' => { preferences => $preferences } );
+            $self->_at_for('app.bsky.actor.putPreferences')->post( 'app.bsky.actor.putPreferences' => { preferences => $preferences } );
         }
 
         method upsertProfile($cb) {
-            my $profile  = $at->get( 'com.atproto.repo.getRecord' => { repo => $at->did, collection => 'app.bsky.actor.profile', rkey => 'self' } );
+            my $profile = $self->_at_for('com.atproto.repo.getRecord')
+                ->get( 'com.atproto.repo.getRecord' => { repo => $self->at->did, collection => 'app.bsky.actor.profile', rkey => 'self' } );
             my %existing = $profile ? %{ $profile->{value} } : ( '$type' => 'app.bsky.actor.profile' );
             my $updated  = $cb->(%existing);
-            my $res      = $at->put_record( 'app.bsky.actor.profile', 'self', $updated, $profile ? $profile->{cid} : () );
+            my $res      = $self->at->put_record( 'app.bsky.actor.profile', 'self', $updated, $profile ? $profile->{cid} : () );
             $res // 1;
         }
 
         method getProfiles(%args) {
-            my $res = $at->get( 'app.bsky.actor.getProfiles' => \%args );
+            my $res = $self->_at_for('app.bsky.actor.getProfiles')->get( 'app.bsky.actor.getProfiles' => \%args );
             $res ? $res->{profiles} : $res;
         }
 
         method getSuggestions(%args) {
-            my $res = $at->get( 'app.bsky.actor.getSuggestions' => \%args );
+            my $res = $self->_at_for('app.bsky.actor.getSuggestions')->get( 'app.bsky.actor.getSuggestions' => \%args );
             $res ? $res->{actors} : $res;
         }
 
         method searchActors(%args) {
-            my $res = $at->get( 'app.bsky.actor.searchActors' => \%args );
+            my $res = $self->_at_for('app.bsky.actor.searchActors')->get( 'app.bsky.actor.searchActors' => \%args );
             $res ? $res->{actors} : $res;
         }
 
         method searchActorsTypeahead(%args) {
-            my $res = $at->get( 'app.bsky.actor.searchActorsTypeahead' => \%args );
+            my $res = $self->_at_for('app.bsky.actor.searchActorsTypeahead')->get( 'app.bsky.actor.searchActorsTypeahead' => \%args );
             $res ? $res->{actors} : $res;
         }
-        method mute($actor)            { $at->post( 'app.bsky.graph.muteActor'       => { actor => $actor } ) }
-        method unmute($actor)          { $at->post( 'app.bsky.graph.unmuteActor'     => { actor => $actor } ) }
-        method muteModList($listUri)   { $at->post( 'app.bsky.graph.muteActorList'   => { list  => $listUri } ) }
-        method unmuteModList($listUri) { $at->post( 'app.bsky.graph.unmuteActorList' => { list  => $listUri } ) }
+        method mute($actor)   { $self->_at_for('app.bsky.graph.muteActor')->post( 'app.bsky.graph.muteActor' => { actor => $actor } ) }
+        method unmute($actor) { $self->_at_for('app.bsky.graph.unmuteActor')->post( 'app.bsky.graph.unmuteActor' => { actor => $actor } ) }
+
+        method muteModList($listUri) {
+            $self->_at_for('app.bsky.graph.muteActorList')->post( 'app.bsky.graph.muteActorList' => { list => $listUri } );
+        }
+
+        method unmuteModList($listUri) {
+            $self->_at_for('app.bsky.graph.unmuteActorList')->post( 'app.bsky.graph.unmuteActorList' => { list => $listUri } );
+        }
 
         method blockModList($listUri) {
-            $at->create_record( 'app.bsky.graph.listblock',
-                { '$type' => 'app.bsky.graph.listblock', subject => $listUri, createdAt => $at->_now->to_string } );
+            $self->at->create_record( 'app.bsky.graph.listblock',
+                { '$type' => 'app.bsky.graph.listblock', subject => $listUri, createdAt => $self->at->_now->to_string } );
+        }
+
+        # Moderation
+        method report ( $subject, $reason_type, $reason = () ) {
+            $self->_at_for('com.atproto.moderation.createReport')
+                ->post( 'com.atproto.moderation.createReport' =>
+                    { subject => $subject, reasonType => $reason_type, defined $reason ? ( reason => $reason ) : () } );
         }
 
         method unblockModList($url) {
             $url = At::Protocol::URI->new($url) unless builtin::blessed $url;
-            $at->delete_record( 'app.bsky.graph.listblock', $url->rkey );
+            $self->at->delete_record( 'app.bsky.graph.listblock', $url->rkey );
         }
 
         # Notifications
         method listNotifications(%args) {
-            my $res = $at->get( 'app.bsky.notification.listNotifications' => \%args );
+            my $res = $self->at->get( 'app.bsky.notification.listNotifications' => \%args );
             $res ? $res->{notifications} : $res;
         }
 
         method countUnreadNotifications() {
-            my $res = $at->get('app.bsky.notification.getUnreadCount');
+            my $res = $self->at->get('app.bsky.notification.getUnreadCount');
             $res ? $res->{count} : $res;
         }
 
         method updateSeenNotifications( $seenAt = undef ) {
-            my $res = $at->post( 'app.bsky.notification.updateSeen' => { seenAt => $seenAt // $at->_now->to_string } );
+            my $res = $self->at->post( 'app.bsky.notification.updateSeen' => { seenAt => $seenAt // $self->at->_now->to_string } );
             $res // 1;
         }
 
         # Identity
         method resolveHandle($handle) {
-            my $res = $at->get( 'com.atproto.identity.resolveHandle' => { handle => $handle } );
+            my $res = $self->at->get( 'com.atproto.identity.resolveHandle' => { handle => $handle } );
             $res ? $res->{did} : $res;
         }
 
         method updateHandle($handle) {
-            $at->post( 'com.atproto.identity.updateHandle' => { handle => $handle } );
+            $self->at->post( 'com.atproto.identity.updateHandle' => { handle => $handle } );
         }
-        method describeServer() { $at->get('com.atproto.server.describeServer') }
+        method describeServer() { $self->at->get('com.atproto.server.describeServer') }
 
         method listRecords(%args) {
-            my $res = $at->get( 'com.atproto.repo.listRecords' => \%args );
+            my $res = $self->at->get( 'com.atproto.repo.listRecords' => \%args );
             $res ? $res->{records} // () : $res;
         }
 
         method getLabelerServices(%args) {
-            my $res = $at->get( 'app.bsky.labeler.getServices' => \%args );
+            my $res = $self->at->get( 'app.bsky.labeler.getServices' => \%args );
             $res ? $res->{views} // () : $res;
         }
 
@@ -589,7 +632,7 @@ package Bluesky 1.00 {
         method parse_facets($text) {
             my @facets;
             for my $m ( $self->parse_mentions($text) ) {
-                my $res = $at->get( 'com.atproto.identity.resolveHandle', { handle => $m->{handle} } );
+                my $res = $self->at->get( 'com.atproto.identity.resolveHandle', { handle => $m->{handle} } );
 
                 # if handle cannot be resolved, just skip it. Bluesky will display it as plain text
                 $res || next;
@@ -623,11 +666,11 @@ package Bluesky 1.00 {
         }
 
         method getReplyRefs($parent_uri) {
-            my $res = $at->get( 'com.atproto.repo.getRecord', $self->parse_uri($parent_uri) );
+            my $res = $self->at->get( 'com.atproto.repo.getRecord', $self->parse_uri($parent_uri) );
             $res || return;
             my $root = my $parent = $res;
             if ( $parent->{value}{reply} ) {
-                $root = $at->get( 'com.atproto.repo.getRecord', $self->parse_uri( $parent->{value}{reply}{root}{uri} ) );
+                $root = $self->at->get( 'com.atproto.repo.getRecord', $self->parse_uri( $parent->{value}{reply}{root}{uri} ) );
                 $res ||= $parent;    # escape hatch
             }
             { root => { uri => $root->{uri}, cid => $root->{cid} }, parent => { uri => $parent->{uri}, cid => $parent->{cid} } };
@@ -652,8 +695,8 @@ package Bluesky 1.00 {
                     $bytes =~ /^.{4}ftypqt /                               ? 'video/quicktime' :
                     $bytes =~ /^.{4}ftyp(isom|mp4[12]?|MSNV|M4[v|a]|f4v)/i ? 'video/mp4' :
                     'application/octet-stream' );
-            my $at_http = $at->http;
-            my $url     = sprintf( '%s/xrpc/%s', $at->host, 'com.atproto.repo.uploadBlob' );
+            my $at_http = $self->at->http;
+            my $url     = sprintf( '%s/xrpc/%s', $self->at->host, 'com.atproto.repo.uploadBlob' );
             my %headers = ( 'Content-Type' => $determined_mime, ( $at_http->auth ? ( 'Authorization' => $at_http->auth ) : () ), );
             $headers{DPoP} = $at_http->_generate_dpop_proof( $url, 'POST' ) if $at_http->token_type eq 'DPoP';
             state $http //= HTTP::Tiny->new;
@@ -760,7 +803,7 @@ package Bluesky 1.00 {
         }
 
         method getEmbedRef($uri) {
-            my $res = $at->get( 'com.atproto.repo.getRecord', $self->parse_uri($uri) );
+            my $res = $self->at->get( 'com.atproto.repo.getRecord', $self->parse_uri($uri) );
             $res || return;
             { '$type' => 'app.bsky.embed.record', record => { uri => $res->{uri}, cid => $res->{cid} } };
         }
@@ -1272,6 +1315,30 @@ AT-URL of a post to reply to.
 
     $bsky->createPost( reply_to => 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.post/3lbvllq2kul27', text => 'Exactly!' );
 
+=item C<reply_gate>
+
+Arrayref of rules to restrict who can reply to this post.
+
+Supported rules:
+
+=over
+
+=item C<mention> - Only users mentioned in the post can reply.
+
+=item C<following> - Only users the author follows can reply.
+
+=item C<list> - Only users in a specific moderation list can reply (requires C<reply_gate_list>).
+
+=back
+
+Example:
+
+    $bsky->createPost( text => 'Private post', reply_gate => ['following'] );
+
+=item C<reply_gate_list>
+
+The AT-URI of a moderation list to use with the C<list> rule in C<reply_gate>.
+
 =item C<embed>
 
 Bluesky allows for posts to contain embedded data.
@@ -1553,6 +1620,12 @@ Enumerates who an account is following.
 
 Enumerates who is following an account.
 
+=head2 C<getKnownFollowers( ... )>
+
+    $bsky->getKnownFollowers( 'sankorobinson.com' );
+
+Enumerates followers of an account that the authorized user also follows (mutuals).
+
 =head2 C<getRelationships( ... )>
 
     $bsky->getRelationships( actors => ['sankorobinson.com', 'bsky.app'] );
@@ -1696,6 +1769,36 @@ Blocks all actors in a moderation list.
     $bsky->unblockModList( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.listblock/3l6oveex3ii2l' );
 
 Unblocks a moderation list.
+
+=head1 Moderation
+
+=head2 C<mute( ... )>
+
+    $bsky->mute( 'sankorobinson.com' );
+
+Mutes an actor.
+
+=head2 C<unmute( ... )>
+
+    $bsky->unmute( 'sankorobinson.com' );
+
+Unmutes an actor.
+
+=head2 C<report( $subject, $reason_type, [ $reason ] )>
+
+Submits a moderation report.
+
+Expected parameters:
+
+=over
+
+=item C<$subject> - The AT-URI or DID being reported.
+
+=item C<$reason_type> - Lexicon-defined reason (e.g., C<com.atproto.moderation.defs#reasonSpam>).
+
+=item C<$reason> - Optional free-text description.
+
+=back
 
 =head1 Notifications
 

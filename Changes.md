@@ -9,12 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added `oauth_helper` method to provide a streamlined, interactive OAuth flow with an optional built-in redirect listener.
 - Implemented functional Chat (Direct Messages) support via PDS proxying (`atproto-proxy`).
+- Added `threadgate` support to `createPost` via the `reply_gate` parameter, allowing users to control who can reply to their posts.
+- Added `getKnownFollowers` method for advanced social discovery (mutual followers).
+- Added `report` method for official content reporting via Ozone (`com.atproto.moderation.createReport`).
 - Added robust service-aware routing in `_at_for` to handle repo, feed, and chat lexicons transparently.
 - Updated examples: `eg/bsky_auth.pl` and `eg/bsky_chat.pl` are now fully operational.
 - Implemented missing methods: `repost`, `deleteRepost`, `uploadBlob`, `deleteBlock`, `follow`, `deleteFollow`, `getFollows`, `getFollowers`, `getRepostedBy`.
 
 ### Changed
 - Refactored all repository-related sugary methods (`repost`, `like`, `block`, `follow`, `createPost`, `upsertProfile`, etc.) to use new high-level `At.pm` helpers, resulting in a cleaner and more maintainable codebase.
+- Standardized internal implementation to use accessor methods (e.g., `$self->at`) instead of direct field access, improving testability and robustness.
 
 ### Fixed
 - Fixed `oauth_helper` to use standard `Mojolicious` objects instead of `Mojolicious::Lite`, resolving "Modification of a read-only value" errors.
