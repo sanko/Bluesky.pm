@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.00] - 2026-03-09
 ### Added
 - Added `oauth_helper` method to provide a streamlined, interactive OAuth flow with an optional built-in redirect listener.
 - Implemented functional Chat (Direct Messages) support via PDS proxying (`atproto-proxy`).
@@ -52,3 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Split from At.pm.
+
+[Unreleased]: https://github.com/sanko/Bluesky.pm/compare/1.00...HEAD
+[1.00]: https://github.com/sanko/Bluesky.pm/compare/0.20...1.00
+[0.20]: https://github.com/sanko/Bluesky.pm/compare/0.19...0.20
+[0.19]: https://github.com/sanko/Bluesky.pm/releases/tag/0.19
