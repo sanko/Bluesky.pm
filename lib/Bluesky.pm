@@ -232,13 +232,7 @@ package Bluesky 1.00 {
                 $post || $post->throw;
                 $cid = $post->{posts}[0]{cid};
             }
-            $self->_at_for('com.atproto.repo.createRecord')->post(
-                'com.atproto.repo.createRecord' => {
-                    repo       => $at->did,
-                    collection => 'app.bsky.feed.repost',
-                    record     => { '$type' => 'app.bsky.feed.repost', subject => { uri => $uri, cid => $cid }, createdAt => $at->_now->to_string }
-                }
-            );
+            $at->create_record( 'app.bsky.feed.repost', { subject => { uri => $uri, cid => $cid }, createdAt => $at->_now->to_string } );
         }
 
         method deleteRepost($url) {
@@ -247,10 +241,9 @@ package Bluesky 1.00 {
                 my $post = $self->getPost($url);
                 $url = $post->{viewer}{repost} // return;
             }
-            $self->_at_for('com.atproto.repo.deleteRecord')
-                ->post( 'com.atproto.repo.deleteRecord' => { repo => $at->did, collection => 'app.bsky.feed.repost', rkey => $url->rkey } );
+            $at->delete_record( 'app.bsky.feed.repost', $url->rkey );
         }
-        method uploadBlob( $data, %opts ) { $self->uploadFile( $data, $opts{mime_type} // () ) }
+        method uploadBlob( $data, %opts ) { $at->upload_blob( $data, $opts{mime_type} // () ) }
 
         method createPost(%args) {
 
@@ -304,12 +297,12 @@ package Bluesky 1.00 {
                     $post{embed} = $self->getEmbedRef( $args{embed}{ref} );
                 }
             }
-            $at->post( 'com.atproto.repo.createRecord' => { repo => $self->did, collection => 'app.bsky.feed.post', record => \%post } );
+            $at->create_record( 'app.bsky.feed.post', \%post );
         }
 
         method deletePost($at_uri) {
             $at_uri = At::Protocol::URI->new($at_uri) unless builtin::blessed $at_uri;
-            $at->post( 'com.atproto.repo.deleteRecord' => { repo => $at_uri->host, collection => 'app.bsky.feed.post', rkey => $at_uri->rkey } );
+            $at->delete_record( 'app.bsky.feed.post', $at_uri->rkey );
         }
 
         method like( $uri, $cid //= () ) {
@@ -318,18 +311,14 @@ package Bluesky 1.00 {
                 $post || $post->throw;
                 $cid = $post->{posts}[0]{cid};
             }
-            $at->post(
-                'com.atproto.repo.createRecord' => {
-                    repo       => $at->did,
-                    collection => 'app.bsky.feed.like',
-                    record     => {
-                        '$type' => 'app.bsky.feed.like',
-                        subject => {                       # com.atproto.repo.strongRef
-                            uri => $uri,
-                            cid => $cid
-                        },
-                        createdAt => $at->_now->to_string
-                    }
+            $at->create_record(
+                'app.bsky.feed.like',
+                {   '$type' => 'app.bsky.feed.like',
+                    subject => {                       # com.atproto.repo.strongRef
+                        uri => $uri,
+                        cid => $cid
+                    },
+                    createdAt => $at->_now->to_string
                 }
             );
         }
@@ -340,20 +329,14 @@ package Bluesky 1.00 {
                 my $post = $self->getPost($url);
                 $url = $post->{viewer}{like} // return;
             }
-            $at->post( 'com.atproto.repo.deleteRecord' => { repo => $at->did, collection => 'app.bsky.feed.like', rkey => $url->rkey } );
+            $at->delete_record( 'app.bsky.feed.like', $url->rkey );
         }
 
         # Social graph
         method block($actor) {
             my $profile = $self->getProfile($actor);
             $profile->{did} // return;
-            $at->post(
-                'com.atproto.repo.createRecord' => {
-                    repo       => $self->did,
-                    collection => 'app.bsky.graph.block',
-                    record     => { createdAt => $at->_now->to_string, subject => $profile->{did} }
-                }
-            );
+            $at->create_record( 'app.bsky.graph.block', { createdAt => $at->_now->to_string, subject => $profile->{did} } );
         }
 
         method getBlocks(%args) {
@@ -363,24 +346,19 @@ package Bluesky 1.00 {
 
         method deleteBlock($url) {
             $url = At::Protocol::URI->new($url) unless builtin::blessed $url;
-            $at->post( 'com.atproto.repo.deleteRecord' => { repo => $at->did, collection => 'app.bsky.graph.block', rkey => $url->rkey } );
+            $at->delete_record( 'app.bsky.graph.block', $url->rkey );
         }
 
         method follow($subject) {
             my $profile = $self->getProfile($subject);
             $profile->{did} // return;
-            $at->post(
-                'com.atproto.repo.createRecord' => {
-                    repo       => $at->did,
-                    collection => 'app.bsky.graph.follow',
-                    record     => { '$type' => 'app.bsky.graph.follow', subject => $profile->{did}, createdAt => $at->_now->to_string }
-                }
-            );
+            $at->create_record( 'app.bsky.graph.follow',
+                { '$type' => 'app.bsky.graph.follow', subject => $profile->{did}, createdAt => $at->_now->to_string } );
         }
 
         method deleteFollow($url) {
             $url = At::Protocol::URI->new($url) unless builtin::blessed $url;
-            $at->post( 'com.atproto.repo.deleteRecord' => { repo => $at->did, collection => 'app.bsky.graph.follow', rkey => $url->rkey } );
+            $at->delete_record( 'app.bsky.graph.follow', $url->rkey );
         }
 
         method getFollows( $actor, %args ) {
@@ -446,9 +424,7 @@ package Bluesky 1.00 {
             my $profile  = $at->get( 'com.atproto.repo.getRecord' => { repo => $at->did, collection => 'app.bsky.actor.profile', rkey => 'self' } );
             my %existing = $profile ? %{ $profile->{value} } : ( '$type' => 'app.bsky.actor.profile' );
             my $updated  = $cb->(%existing);
-            my %payload  = ( repo => $at->did, collection => 'app.bsky.actor.profile', rkey => 'self', record => $updated );
-            $payload{swapRecord} = $profile->{cid} if $profile;
-            my $res = $at->post( 'com.atproto.repo.putRecord' => \%payload );
+            my $res      = $at->put_record( 'app.bsky.actor.profile', 'self', $updated, $profile ? $profile->{cid} : () );
             $res // 1;
         }
 
@@ -477,18 +453,13 @@ package Bluesky 1.00 {
         method unmuteModList($listUri) { $at->post( 'app.bsky.graph.unmuteActorList' => { list  => $listUri } ) }
 
         method blockModList($listUri) {
-            $at->post(
-                'com.atproto.repo.createRecord' => {
-                    repo       => $at->did,
-                    collection => 'app.bsky.graph.listblock',
-                    record     => { '$type' => 'app.bsky.graph.listblock', subject => $listUri, createdAt => $at->_now->to_string }
-                }
-            );
+            $at->create_record( 'app.bsky.graph.listblock',
+                { '$type' => 'app.bsky.graph.listblock', subject => $listUri, createdAt => $at->_now->to_string } );
         }
 
         method unblockModList($url) {
             $url = At::Protocol::URI->new($url) unless builtin::blessed $url;
-            $at->post( 'com.atproto.repo.deleteRecord' => { repo => $at->did, collection => 'app.bsky.graph.listblock', rkey => $url->rkey } );
+            $at->delete_record( 'app.bsky.graph.listblock', $url->rkey );
         }
 
         # Notifications

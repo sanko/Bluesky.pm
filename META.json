@@ -89,7 +89,7 @@
             "Mojo::UserAgent" : "0"
          },
          "requires" : {
-            "At" : "1.3",
+            "At" : "0",
             "HTTP::Tiny" : "0",
             "Mozilla::CA" : "0",
             "Path::Tiny" : "0",

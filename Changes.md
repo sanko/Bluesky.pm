@@ -6,19 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-
 ### Added
 - Added `oauth_helper` method to provide a streamlined, interactive OAuth flow with an optional built-in redirect listener.
 - Implemented functional Chat (Direct Messages) support via PDS proxying (`atproto-proxy`).
-- Added robust service aware routing in `_at_for` to handle repo, feed, and chat lexicons transparently.
+- Added robust service-aware routing in `_at_for` to handle repo, feed, and chat lexicons transparently.
+- Updated examples: `eg/bsky_auth.pl` and `eg/bsky_chat.pl` are now fully operational.
+- Implemented missing methods: `repost`, `deleteRepost`, `uploadBlob`, `deleteBlock`, `follow`, `deleteFollow`, `getFollows`, `getFollowers`, `getRepostedBy`.
+
+### Changed
+- Refactored all repository-related sugary methods (`repost`, `like`, `block`, `follow`, `createPost`, `upsertProfile`, etc.) to use new high-level `At.pm` helpers, resulting in a cleaner and more maintainable codebase.
 
 ### Fixed
 - Fixed `oauth_helper` to use standard `Mojolicious` objects instead of `Mojolicious::Lite`, resolving "Modification of a read-only value" errors.
 - Corrected OAuth scopes to use `transition:generic` and `transition:chat.bsky` for reliable chat authorization.
 - Fixed sender handle display in `bsky_chat.pl` by mapping member DIDs to handles.
-
-### Added
-- Implemented missing methods: `repost`, `deleteRepost`, `uploadBlob`, `deleteBlock`, `follow`, `deleteFollow`, `getFollows`, `getFollowers`, `getRepostedBy`.
 - Support for Bookmarks: `getBookmarks`, `createBookmark`, `deleteBookmark`.
 - Feed Generator methods: `getFeed`, `getFeedSkeleton`, `getFeedGenerator`, `getFeedGenerators`, `getActorFeeds`, `getSuggestedFeeds`, `getPopularFeedGenerators`, `getTrends`, `describeFeedGenerator`.
 - Social Graph features: `getRelationships`, `getMutes`, `muteThread`, `unmuteThread`, `getLists`, `getList`, `getKnownFollowers`, `getSuggestedFollowsByActor`.
