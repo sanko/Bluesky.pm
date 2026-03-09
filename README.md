@@ -1119,10 +1119,10 @@ $bsky->getConvo( $convoId );
 
 Get a detailed view of a conversation.
 
-## `getConvoForMembers( actors => [ ... ] )`
+## `getConvoForMembers( members => [ ... ] )`
 
 ```perl
-$bsky->getConvoForMembers( actors => [ 'did:plc:...' ] );
+$bsky->getConvoForMembers( members => [ 'did:plc:...' ] );
 ```
 
 Get or create a conversation for a list of members.

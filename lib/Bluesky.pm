@@ -1872,9 +1872,9 @@ Enumerates conversations for the authorized user.
 
 Get a detailed view of a conversation.
 
-=head2 C<getConvoForMembers( actors =E<gt> [ ... ] )>
+=head2 C<getConvoForMembers( members =E<gt> [ ... ] )>
 
-    $bsky->getConvoForMembers( actors => [ 'did:plc:...' ] );
+    $bsky->getConvoForMembers( members => [ 'did:plc:...' ] );
 
 Get or create a conversation for a list of members.
 
