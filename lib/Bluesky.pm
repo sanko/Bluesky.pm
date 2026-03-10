@@ -314,6 +314,22 @@ package Bluesky 1.00 {
                     { post => $post_uri->as_string, allow => \@allow, createdAt => $self->at->_now->to_string, },
                     $post_uri->rkey );    # Must match post rkey
             }
+
+            # If post_gate is requested, create a postgate record
+            if ( $res && $res->{uri} && $args{post_gate} ) {
+                my $post_uri = At::Protocol::URI->new( $res->{uri} );
+                my @embedding_rules;
+                if ( ref $args{post_gate} eq 'ARRAY' ) {
+                    for my $rule ( @{ $args{post_gate} } ) {
+                        if ( $rule eq 'disable' ) {
+                            push @embedding_rules, { '$type' => 'app.bsky.feed.postgate#disableRule' };
+                        }
+                    }
+                }
+                $self->at->create_record( 'app.bsky.feed.postgate',
+                    { post => $post_uri->as_string, embeddingRules => \@embedding_rules, createdAt => $self->at->_now->to_string, },
+                    $post_uri->rkey );
+            }
             return $res;
         }
 
@@ -321,8 +337,9 @@ package Bluesky 1.00 {
             $at_uri = At::Protocol::URI->new($at_uri) unless builtin::blessed $at_uri;
             $self->at->delete_record( 'app.bsky.feed.post', $at_uri->rkey );
 
-            # Automatically try to delete threadgate too
+            # Automatically try to delete gates too
             $self->at->delete_record( 'app.bsky.feed.threadgate', $at_uri->rkey );
+            $self->at->delete_record( 'app.bsky.feed.postgate',   $at_uri->rkey );
         }
 
         method like( $uri, $cid //= () ) {
@@ -1338,6 +1355,22 @@ Example:
 =item C<reply_gate_list>
 
 The AT-URI of a moderation list to use with the C<list> rule in C<reply_gate>.
+
+=item C<post_gate>
+
+Arrayref of rules to restrict embedding or quoting of this post.
+
+Currently supports:
+
+=over
+
+=item C<disable> - Disable all quotes and embeds of this post.
+
+=back
+
+Example:
+
+    $bsky->createPost( text => 'No quoting allowed', post_gate => ['disable'] );
 
 =item C<embed>
 

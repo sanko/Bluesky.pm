@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Adding support for `app.bsky.feed.postgate`.
+
 ### Changed
 - Minor doc fixes.
 
