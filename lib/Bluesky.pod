@@ -9,7 +9,7 @@ Bluesky - Bluesky Client Library in Perl
 =head1 SYNOPSIS
 
     use Bluesky;
-    my $bsky = Bluesky->new();
+    my $bsky = Bluesky->new( );
 
     # Interactive OAuth Authentication (Recommended)
     $bsky->oauth_helper(

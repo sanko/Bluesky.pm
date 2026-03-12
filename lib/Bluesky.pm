@@ -1,4 +1,4 @@
-package Bluesky 1.00 {
+package Bluesky 1.01 {
     use v5.40;
     use Carp qw[carp];
     use bytes;
