@@ -151,6 +151,15 @@ package Bluesky v1.5.0 {
             $res ? $res->{feed} // () : $res;
         }
 
+        method getListFeed( $list, %args ) {
+            my $res = $self->_at_for('app.bsky.feed.getListFeed')->get( 'app.bsky.feed.getListFeed' => { list => $list, %args } );
+            $res ? $res->{feed} // () : $res;
+        }
+
+        method sendInteractions(%args) {
+            $self->_at_for('app.bsky.feed.sendInteractions')->post( 'app.bsky.feed.sendInteractions' => \%args );
+        }
+
         method getPost($uri) {
             my $res = $self->_at_for('app.bsky.feed.getPosts')
                 ->get( 'app.bsky.feed.getPosts' => { uris => [ builtin::blessed $uri ? $uri->as_string : $uri ] } );
@@ -425,9 +434,25 @@ package Bluesky v1.5.0 {
         method muteThread($uri)   { $self->_at_for('app.bsky.graph.muteThread')->post( 'app.bsky.graph.muteThread' => { root => $uri } ) }
         method unmuteThread($uri) { $self->_at_for('app.bsky.graph.unmuteThread')->post( 'app.bsky.graph.unmuteThread' => { root => $uri } ) }
 
+        method getListBlocks(%args) {
+            my $res = $self->_at_for('app.bsky.graph.getListBlocks')->get( 'app.bsky.graph.getListBlocks' => \%args );
+            $res ? $res->{lists} // () : $res;
+        }
+
+        method getListMutes(%args) {
+            my $res = $self->_at_for('app.bsky.graph.getListMutes')->get( 'app.bsky.graph.getListMutes' => \%args );
+            $res ? $res->{lists} // () : $res;
+        }
+
         method getLists( $actor, %args ) {
             my $res = $self->_at_for('app.bsky.graph.getLists')->get( 'app.bsky.graph.getLists' => { actor => $actor, %args } );
             $res ? $res->{lists} // () : $res;
+        }
+
+        method getListsWithMembership( $actor, %args ) {
+            my $res = $self->_at_for('app.bsky.graph.getListsWithMembership')
+                ->get( 'app.bsky.graph.getListsWithMembership' => { actor => $actor, %args } );
+            $res ? $res->{listsWithMembership} // () : $res;
         }
 
         method getList( $list, %args ) {
@@ -447,6 +472,23 @@ package Bluesky v1.5.0 {
         method getActorStarterPacks( $actor, %args ) {
             my $res
                 = $self->_at_for('app.bsky.graph.getActorStarterPacks')->get( 'app.bsky.graph.getActorStarterPacks' => { actor => $actor, %args } );
+            $res ? $res->{starterPacks} // () : $res;
+        }
+
+        method getStarterPacksWithMembership( $actor, %args ) {
+            my $res = $self->_at_for('app.bsky.graph.getStarterPacksWithMembership')
+                ->get( 'app.bsky.graph.getStarterPacksWithMembership' => { actor => $actor, %args } );
+            $res ? $res->{starterPacksWithMembership} // () : $res;
+        }
+
+        method getSuggestedFollowsByActor($actor) {
+            my $res = $self->_at_for('app.bsky.graph.getSuggestedFollowsByActor')
+                ->get( 'app.bsky.graph.getSuggestedFollowsByActor' => { actor => $actor } );
+            $res ? $res->{suggestions} // () : $res;
+        }
+
+        method searchStarterPacks(%args) {
+            my $res = $self->_at_for('app.bsky.graph.searchStarterPacks')->get( 'app.bsky.graph.searchStarterPacks' => \%args );
             $res ? $res->{starterPacks} // () : $res;
         }
 
@@ -534,6 +576,39 @@ package Bluesky v1.5.0 {
             $res // 1;
         }
 
+        method getNotificationPreferences() {
+            my $res = $self->_at_for('app.bsky.notification.getPreferences')->get('app.bsky.notification.getPreferences');
+            $res ? $res->{preferences} // () : $res;
+        }
+
+        method putNotificationPreferences(%args) {
+            $self->_at_for('app.bsky.notification.putPreferences')->post( 'app.bsky.notification.putPreferences' => \%args );
+        }
+
+        method putNotificationPreferencesV2(%args) {
+            my $res = $self->_at_for('app.bsky.notification.putPreferencesV2')->post( 'app.bsky.notification.putPreferencesV2' => \%args );
+            $res ? $res->{preferences} // () : $res;
+        }
+
+        method listActivitySubscriptions(%args) {
+            my $res = $self->_at_for('app.bsky.notification.listActivitySubscriptions')
+                ->get( 'app.bsky.notification.listActivitySubscriptions' => \%args );
+            $res ? $res->{subscriptions} // () : $res;
+        }
+
+        method putActivitySubscription( $subject, $activitySubscription ) {
+            $self->_at_for('app.bsky.notification.putActivitySubscription')
+                ->post( 'app.bsky.notification.putActivitySubscription' => { subject => $subject, activitySubscription => $activitySubscription } );
+        }
+
+        method registerPush(%args) {
+            $self->_at_for('app.bsky.notification.registerPush')->post( 'app.bsky.notification.registerPush' => \%args );
+        }
+
+        method unregisterPush(%args) {
+            $self->_at_for('app.bsky.notification.unregisterPush')->post( 'app.bsky.notification.unregisterPush' => \%args );
+        }
+
         # Identity
         method resolveHandle($handle) {
             my $res = $self->at->get( 'com.atproto.identity.resolveHandle' => { handle => $handle } );
@@ -553,6 +628,11 @@ package Bluesky v1.5.0 {
         method getLabelerServices(%args) {
             my $res = $self->at->get( 'app.bsky.labeler.getServices' => \%args );
             $res ? $res->{views} // () : $res;
+        }
+
+        method queryLabels(%args) {
+            my $res = $self->_at_for('com.atproto.label.queryLabels')->get( 'com.atproto.label.queryLabels' => \%args );
+            $res ? $res->{labels} // () : $res;
         }
 
         # Chat
@@ -616,6 +696,105 @@ package Bluesky v1.5.0 {
             $self->_at_for('chat.bsky.convo.getConvoAvailability')->get( 'chat.bsky.convo.getConvoAvailability' => \%args );
         }
         method getLog(%args) { $self->_at_for('chat.bsky.convo.getLog')->get( 'chat.bsky.convo.getLog' => \%args ) }
+
+        # Video services
+        method getVideoUploadLimits() {
+            $self->_at_for('app.bsky.video.getUploadLimits')->get('app.bsky.video.getUploadLimits');
+        }
+
+        method getVideoJobStatus($jobId) {
+            my $res = $self->_at_for('app.bsky.video.getJobStatus')->get( 'app.bsky.video.getJobStatus' => { jobId => $jobId } );
+            $res ? $res->{jobStatus} // () : $res;
+        }
+
+        method uploadVideoJob( $bytes, $mime_type = 'video/mp4' ) {
+            if    ( builtin::blessed $bytes ) { $bytes = $bytes->slurp_raw }
+            elsif ( ( $^O eq 'MSWin32' ? $bytes !~ m/[\x00<>:"\/\\|?*]/ : 1 ) && -e $bytes ) {
+                $bytes = path($bytes)->slurp_raw;
+            }
+            my $at_http = $self->at->http;
+            my $url     = sprintf( '%s/xrpc/%s', $self->at->host, 'app.bsky.video.uploadVideo' );
+            my %headers = ( 'Content-Type' => $mime_type, ( $at_http->auth ? ( 'Authorization' => $at_http->auth ) : () ), );
+            $headers{DPoP} = $at_http->_generate_dpop_proof( $url, 'POST' ) if $at_http->token_type eq 'DPoP';
+            state $http //= HTTP::Tiny->new;
+            my $res     = $http->post( $url, { content => $bytes, headers => \%headers } );
+            my $content = $res->{content};
+
+            if ( $res->{success} ) {
+                $content = decode_json($content) if $content && ( $res->{headers}{'content-type'} // '' ) =~ m[json];
+                return $content->{jobStatus} // $content;
+            }
+            my $msg = $res->{reason} // 'Unknown error';
+            if ( $content && ( $res->{headers}{'content-type'} // '' ) =~ m[json] ) {
+                my $json = decode_json($content);
+                $msg .= ': ' . $json->{message} if $json->{message};
+            }
+            return At::Error->new( message => $msg, fatal => 1 );
+        }
+
+        # Drafts (private post drafts via stash)
+        method getDrafts(%args) {
+            my $res = $self->_at_for('app.bsky.draft.getDrafts')->get( 'app.bsky.draft.getDrafts' => \%args );
+            $res ? $res->{drafts} // () : $res;
+        }
+
+        method createDraft($draft) {
+            $self->_at_for('app.bsky.draft.createDraft')->post( 'app.bsky.draft.createDraft' => { draft => $draft } );
+        }
+
+        method updateDraft($draft) {
+            $self->_at_for('app.bsky.draft.updateDraft')->post( 'app.bsky.draft.updateDraft' => { draft => $draft } );
+        }
+
+        method deleteDraft($id) {
+            $self->_at_for('app.bsky.draft.deleteDraft')->post( 'app.bsky.draft.deleteDraft' => { id => $id } );
+        }
+
+        # Contacts (secure contact-import matching)
+        method getContactMatches(%args) {
+            my $res = $self->_at_for('app.bsky.contact.getMatches')->get( 'app.bsky.contact.getMatches' => \%args );
+            $res ? $res->{matches} // () : $res;
+        }
+
+        method getContactSyncStatus() {
+            my $res = $self->_at_for('app.bsky.contact.getSyncStatus')->get('app.bsky.contact.getSyncStatus');
+            $res ? $res->{syncStatus} // () : $res;
+        }
+
+        method importContacts(%args) {
+            my $res = $self->_at_for('app.bsky.contact.importContacts')->post( 'app.bsky.contact.importContacts' => \%args );
+            $res ? $res->{matchesAndContactIndexes} // () : $res;
+        }
+
+        method dismissContactMatch($subject) {
+            $self->_at_for('app.bsky.contact.dismissMatch')->post( 'app.bsky.contact.dismissMatch' => { subject => $subject } );
+        }
+
+        method removeContactData() {
+            $self->_at_for('app.bsky.contact.removeData')->post('app.bsky.contact.removeData');
+        }
+
+        method startPhoneVerification($phone) {
+            $self->_at_for('app.bsky.contact.startPhoneVerification')->post( 'app.bsky.contact.startPhoneVerification' => { phone => $phone } );
+        }
+
+        method verifyPhone( $phone, $code ) {
+            my $res = $self->_at_for('app.bsky.contact.verifyPhone')->post( 'app.bsky.contact.verifyPhone' => { phone => $phone, code => $code } );
+            $res ? $res->{token} // () : $res;
+        }
+
+        # Age assurance
+        method beginAgeAssurance(%args) {
+            $self->_at_for('app.bsky.ageassurance.begin')->post( 'app.bsky.ageassurance.begin' => \%args );
+        }
+
+        method getAgeAssuranceConfig() {
+            $self->_at_for('app.bsky.ageassurance.getConfig')->get('app.bsky.ageassurance.getConfig');
+        }
+
+        method getAgeAssuranceState(%args) {
+            $self->_at_for('app.bsky.ageassurance.getState')->get( 'app.bsky.ageassurance.getState' => \%args );
+        }
 
         # Utils
         method parse_mentions($text) {

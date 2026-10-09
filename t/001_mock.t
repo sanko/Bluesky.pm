@@ -1,5 +1,6 @@
 use v5.40;
-use Test::More;
+use Test2::V0;
+use blib;
 use lib 'lib', '../At.pm/lib';
 use Bluesky;
 use At::Error;

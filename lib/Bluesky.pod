@@ -231,6 +231,20 @@ Get a hydrated feed from a feed generator. C<$feed> is the feed generator AT-URI
 Get a feed skeleton (list of URIs) from a feed generator. C<$feed> is the feed generator AT-URI. Returns the C<feed>
 arrayref.
 
+=head2 C<getListFeed( $list, [...] )>
+
+    $bsky->getListFeed( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.list/3l6oveex3ii2l' );
+
+Get a feed of recent posts from a list (posts and reposts from any actors on the list). Does not require auth.
+Returns the C<feed> arrayref.
+
+=head2 C<sendInteractions( [...] )>
+
+    $bsky->sendInteractions( interactions => [ { item => $uri, event => 'app.bsky.feed.defs#interactionSeen' } ] );
+
+Send information about interactions with feed items back to the feed generator that served them. Accepts
+C<interactions> (required) and an optional C<feed> AT-URI.
+
 =head2 C<getAuthorFeed( ... )>
 
     $bsky->getAuthorFeed( actor => 'sankorobinson.com' );
@@ -268,6 +282,8 @@ Known values:
 =item C<posts_with_media>
 
 =item C<posts_and_author_threads>
+
+=item C<posts_with_video>
 
 =back
 
@@ -841,6 +857,18 @@ C<others>; C<actor> defaults to the authenticated DID if omitted.
 
 Enumerate actors that the authorized user has muted.
 
+=head2 C<getListBlocks( [...] )>
+
+    $bsky->getListBlocks();
+
+Get mod lists that the requesting account is blocking. Requires auth. Returns the C<lists> arrayref.
+
+=head2 C<getListMutes( [...] )>
+
+    $bsky->getListMutes();
+
+Enumerate mod lists that the requesting account currently has muted. Requires auth. Returns the C<lists> arrayref.
+
 =head2 C<muteThread( ... )>
 
     $bsky->muteThread( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3l6oveex3ii2l' );
@@ -865,6 +893,13 @@ Enumerate moderation lists created by an actor.
 
 Get detailed view of a moderation list.
 
+=head2 C<getListsWithMembership( $actor, [...] )>
+
+    $bsky->getListsWithMembership( 'sankorobinson.com' );
+
+Enumerate the lists created by the session user, including membership information about C<$actor> in those lists.
+Requires auth. Returns the C<listsWithMembership> arrayref.
+
 =head2 C<getStarterPack( ... )>
 
     $bsky->getStarterPack( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.starterpack/3l6oveex3ii2l' );
@@ -885,6 +920,26 @@ Get views for a list of starter packs.
     $bsky->getActorStarterPacks( 'sankorobinson.com' );
 
 Get starter packs created by an actor.
+
+=head2 C<getStarterPacksWithMembership( $actor, [...] )>
+
+    $bsky->getStarterPacksWithMembership( 'sankorobinson.com' );
+
+Enumerate the starter packs created by the session user, including membership information about C<$actor> in those
+starter packs. Requires auth.
+
+=head2 C<getSuggestedFollowsByActor( $actor )>
+
+    $bsky->getSuggestedFollowsByActor( 'sankorobinson.com' );
+
+Enumerate follows similar to a given account. Expected use is recommending additional accounts immediately after
+following one account. Returns the C<suggestions> arrayref.
+
+=head2 C<searchStarterPacks( ... )>
+
+    $bsky->searchStarterPacks( q => 'perl' );
+
+Find starter packs matching search criteria. Requires auth. Returns the C<starterPacks> arrayref.
 
 =head1 Actors
 
@@ -1018,6 +1073,50 @@ Count unread notifications.
 
 Update when notifications were last seen.
 
+=head2 C<getNotificationPreferences( )>
+
+    $bsky->getNotificationPreferences();
+
+Get notification-related preferences for the account. Requires auth.
+
+=head2 C<putNotificationPreferences( ... )>
+
+    $bsky->putNotificationPreferences( priority => 1 );
+
+Set notification-related preferences for the account. Requires auth.
+
+=head2 C<putNotificationPreferencesV2( ... )>
+
+    $bsky->putNotificationPreferencesV2( like => { list => 1, push => 1, include => 'follows' } );
+
+Set granular notification preferences (chat, like, quote, reply, follow, repost, mention, etc). Requires auth.
+Returns the updated C<preferences>.
+
+=head2 C<listActivitySubscriptions( [...] )>
+
+    $bsky->listActivitySubscriptions();
+
+Enumerate all accounts to which the requesting account is subscribed to receive notifications for. Requires auth.
+Returns the C<subscriptions> arrayref.
+
+=head2 C<putActivitySubscription( $subject, $activitySubscription )>
+
+    $bsky->putActivitySubscription( 'did:plc:...', { post => 1, reply => 1 } );
+
+Subscribe (or update a subscription) to activity notifications for C<$subject>. Requires auth.
+
+=head2 C<registerPush( ... )>
+
+    $bsky->registerPush( serviceDid => 'did:web:...', token => '...', platform => 'ios', appId => '...' );
+
+Register to receive push notifications via a specified service. Requires auth.
+
+=head2 C<unregisterPush( ... )>
+
+    $bsky->unregisterPush( serviceDid => 'did:web:...', token => '...', platform => 'ios', appId => '...' );
+
+Stop push notifications for the given token. Requires auth.
+
 =head1 Identity
 
 Methods in this section deal with handle and DID resolution.
@@ -1051,6 +1150,13 @@ List records in a repository collection.
     $bsky->getLabelerServices( dids => [ ... ] );
 
 Get views of labeler services.
+
+=head2 C<queryLabels( ... )>
+
+    $bsky->queryLabels( uriPatterns => [ 'at://did:plc:.../*' ] );
+
+Find labels relevant to the provided AT-URI patterns. Accepts C<uriPatterns> (required), C<sources>, C<limit>, and
+C<cursor>. Returns the C<labels> arrayref.
 
 =head1 Chat
 
@@ -1145,6 +1251,128 @@ Check if the authorized user can join conversations.
     $bsky->getLog();
 
 Get a log of chat events.
+
+=head1 Video Services
+
+Methods in this section deal with the video upload service.
+
+=head2 C<getVideoUploadLimits( )>
+
+    $bsky->getVideoUploadLimits();
+
+Get video upload limits for the authenticated user (whether uploads are allowed, remaining daily bytes/videos).
+
+=head2 C<getVideoJobStatus( $jobId )>
+
+    $bsky->getVideoJobStatus( $jobId );
+
+Get status details for a video processing job. Returns the C<jobStatus>.
+
+=head2 C<uploadVideoJob( $bytes_or_path, [ $mime_type ] )>
+
+    $bsky->uploadVideoJob( 'path/to/clip.mp4' );
+
+Upload a video to the video service (C<app.bsky.video.uploadVideo>) for processing. Returns the C<jobStatus>.
+Unlike L</uploadVideo>, which uploads a finished blob for embedding, this starts a server-side processing job;
+poll L</getVideoJobStatus> until it completes.
+
+=head1 Drafts
+
+Methods in this section manage private post drafts (stored server-side, requiring auth).
+
+=head2 C<getDrafts( [...] )>
+
+    $bsky->getDrafts();
+
+Get views of the user's drafts. Returns the C<drafts> arrayref.
+
+=head2 C<createDraft( $draft )>
+
+    $bsky->createDraft( { posts => [ { text => 'Unfinished thought...' } ] } );
+
+Insert a draft. Returns the creation response, including the draft C<id>.
+
+=head2 C<updateDraft( $draft )>
+
+    $bsky->updateDraft( { id => $id, draft => { posts => [ ... ] } } );
+
+Update a draft. Updates to unknown IDs are silently ignored.
+
+=head2 C<deleteDraft( $id )>
+
+    $bsky->deleteDraft( $id );
+
+Delete a draft by ID.
+
+=head1 Contacts
+
+Methods in this section deal with secure contact-import matching (all require auth).
+
+=head2 C<getContactMatches( [...] )>
+
+    $bsky->getContactMatches();
+
+Return matched contacts (mutually imported, excluding dismissed matches). Returns the C<matches> arrayref.
+
+=head2 C<getContactSyncStatus( )>
+
+    $bsky->getContactSyncStatus();
+
+Get the user's current contact import status.
+
+=head2 C<importContacts( ... )>
+
+    $bsky->importContacts( token => $token, contacts => [ '+12125550123' ] );
+
+Import contacts for secure matching. C<$token> comes from L</verifyPhone>. Returns matched contacts with their
+input indexes. See L<https://docs.bsky.app/blog/contact-import-rfc>.
+
+=head2 C<dismissContactMatch( $subject )>
+
+    $bsky->dismissContactMatch( 'did:plc:...' );
+
+Dismiss a contact match so it no longer appears, even on re-import.
+
+=head2 C<removeContactData( )>
+
+    $bsky->removeContactData();
+
+Remove all stored contact-matching hashes, matches, and sync status.
+
+=head2 C<startPhoneVerification( $phone )>
+
+    $bsky->startPhoneVerification( '+12125550123' );
+
+Start a phone verification flow; the phone receives an SMS code for L</verifyPhone>.
+
+=head2 C<verifyPhone( $phone, $code )>
+
+    my $token = $bsky->verifyPhone( '+12125550123', '123456' );
+
+Verify control over a phone number and start a contact import session. Returns a single-use token for
+L</importContacts>.
+
+=head1 Age Assurance
+
+Methods in this section deal with Age Assurance.
+
+=head2 C<beginAgeAssurance( ... )>
+
+    $bsky->beginAgeAssurance( email => 'me@example.com', language => 'en', countryCode => 'US' );
+
+Initiate Age Assurance for the account. Requires C<email>, C<language>, and C<countryCode>.
+
+=head2 C<getAgeAssuranceConfig( )>
+
+    $bsky->getAgeAssuranceConfig();
+
+Return Age Assurance configuration for use on the client.
+
+=head2 C<getAgeAssuranceState( ... )>
+
+    $bsky->getAgeAssuranceState( countryCode => 'US' );
+
+Return the server-computed Age Assurance state. C<countryCode> is required.
 
 =head1 Utilities and Upload Helpers
 

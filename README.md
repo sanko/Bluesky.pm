@@ -235,6 +235,24 @@ $bsky->getFeedSkeleton( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.gen
 Get a feed skeleton (list of URIs) from a feed generator. `$feed` is the feed generator AT-URI. Returns the `feed`
 arrayref.
 
+## `getListFeed( $list, [...] )`
+
+```
+$bsky->getListFeed( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.list/3l6oveex3ii2l' );
+```
+
+Get a feed of recent posts from a list (posts and reposts from any actors on the list). Does not require auth.
+Returns the `feed` arrayref.
+
+## `sendInteractions( [...] )`
+
+```perl
+$bsky->sendInteractions( interactions => [ { item => $uri, event => 'app.bsky.feed.defs#interactionSeen' } ] );
+```
+
+Send information about interactions with feed items back to the feed generator that served them. Accepts
+`interactions` (required) and an optional `feed` AT-URI.
+
 ## `getAuthorFeed( ... )`
 
 ```perl
@@ -266,6 +284,7 @@ Expected parameters include:
     - `posts_no_replies`
     - `posts_with_media`
     - `posts_and_author_threads`
+    - `posts_with_video`
 
 - `includePins`
 
@@ -863,6 +882,22 @@ $bsky->getMutes();
 
 Enumerate actors that the authorized user has muted.
 
+## `getListBlocks( [...] )`
+
+```
+$bsky->getListBlocks();
+```
+
+Get mod lists that the requesting account is blocking. Requires auth. Returns the `lists` arrayref.
+
+## `getListMutes( [...] )`
+
+```
+$bsky->getListMutes();
+```
+
+Enumerate mod lists that the requesting account currently has muted. Requires auth. Returns the `lists` arrayref.
+
 ## `muteThread( ... )`
 
 ```
@@ -895,6 +930,15 @@ $bsky->getList( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.list/3l6ov
 
 Get detailed view of a moderation list.
 
+## `getListsWithMembership( $actor, [...] )`
+
+```
+$bsky->getListsWithMembership( 'sankorobinson.com' );
+```
+
+Enumerate the lists created by the session user, including membership information about `$actor` in those lists.
+Requires auth. Returns the `listsWithMembership` arrayref.
+
 ## `getStarterPack( ... )`
 
 ```
@@ -921,6 +965,32 @@ $bsky->getActorStarterPacks( 'sankorobinson.com' );
 ```
 
 Get starter packs created by an actor.
+
+## `getStarterPacksWithMembership( $actor, [...] )`
+
+```
+$bsky->getStarterPacksWithMembership( 'sankorobinson.com' );
+```
+
+Enumerate the starter packs created by the session user, including membership information about `$actor` in those
+starter packs. Requires auth.
+
+## `getSuggestedFollowsByActor( $actor )`
+
+```
+$bsky->getSuggestedFollowsByActor( 'sankorobinson.com' );
+```
+
+Enumerate follows similar to a given account. Expected use is recommending additional accounts immediately after
+following one account. Returns the `suggestions` arrayref.
+
+## `searchStarterPacks( ... )`
+
+```perl
+$bsky->searchStarterPacks( q => 'perl' );
+```
+
+Find starter packs matching search criteria. Requires auth. Returns the `starterPacks` arrayref.
 
 # Actors
 
@@ -1082,6 +1152,64 @@ $bsky->updateSeenNotifications();
 
 Update when notifications were last seen.
 
+## `getNotificationPreferences( )`
+
+```
+$bsky->getNotificationPreferences();
+```
+
+Get notification-related preferences for the account. Requires auth.
+
+## `putNotificationPreferences( ... )`
+
+```perl
+$bsky->putNotificationPreferences( priority => 1 );
+```
+
+Set notification-related preferences for the account. Requires auth.
+
+## `putNotificationPreferencesV2( ... )`
+
+```perl
+$bsky->putNotificationPreferencesV2( like => { list => 1, push => 1, include => 'follows' } );
+```
+
+Set granular notification preferences (chat, like, quote, reply, follow, repost, mention, etc). Requires auth.
+Returns the updated `preferences`.
+
+## `listActivitySubscriptions( [...] )`
+
+```
+$bsky->listActivitySubscriptions();
+```
+
+Enumerate all accounts to which the requesting account is subscribed to receive notifications for. Requires auth.
+Returns the `subscriptions` arrayref.
+
+## `putActivitySubscription( $subject, $activitySubscription )`
+
+```perl
+$bsky->putActivitySubscription( 'did:plc:...', { post => 1, reply => 1 } );
+```
+
+Subscribe (or update a subscription) to activity notifications for `$subject`. Requires auth.
+
+## `registerPush( ... )`
+
+```perl
+$bsky->registerPush( serviceDid => 'did:web:...', token => '...', platform => 'ios', appId => '...' );
+```
+
+Register to receive push notifications via a specified service. Requires auth.
+
+## `unregisterPush( ... )`
+
+```perl
+$bsky->unregisterPush( serviceDid => 'did:web:...', token => '...', platform => 'ios', appId => '...' );
+```
+
+Stop push notifications for the given token. Requires auth.
+
 # Identity
 
 Methods in this section deal with handle and DID resolution.
@@ -1125,6 +1253,15 @@ $bsky->getLabelerServices( dids => [ ... ] );
 ```
 
 Get views of labeler services.
+
+## `queryLabels( ... )`
+
+```perl
+$bsky->queryLabels( uriPatterns => [ 'at://did:plc:.../*' ] );
+```
+
+Find labels relevant to the provided AT-URI patterns. Accepts `uriPatterns` (required), `sources`, `limit`, and
+`cursor`. Returns the `labels` arrayref.
 
 # Chat
 
@@ -1249,6 +1386,162 @@ $bsky->getLog();
 ```
 
 Get a log of chat events.
+
+# Video Services
+
+Methods in this section deal with the video upload service.
+
+## `getVideoUploadLimits( )`
+
+```
+$bsky->getVideoUploadLimits();
+```
+
+Get video upload limits for the authenticated user (whether uploads are allowed, remaining daily bytes/videos).
+
+## `getVideoJobStatus( $jobId )`
+
+```
+$bsky->getVideoJobStatus( $jobId );
+```
+
+Get status details for a video processing job. Returns the `jobStatus`.
+
+## `uploadVideoJob( $bytes_or_path, [ $mime_type ] )`
+
+```
+$bsky->uploadVideoJob( 'path/to/clip.mp4' );
+```
+
+Upload a video to the video service (`app.bsky.video.uploadVideo`) for processing. Returns the `jobStatus`.
+Unlike ["uploadVideo"](#uploadvideo), which uploads a finished blob for embedding, this starts a server-side processing job;
+poll ["getVideoJobStatus"](#getvideojobstatus) until it completes.
+
+# Drafts
+
+Methods in this section manage private post drafts (stored server-side, requiring auth).
+
+## `getDrafts( [...] )`
+
+```
+$bsky->getDrafts();
+```
+
+Get views of the user's drafts. Returns the `drafts` arrayref.
+
+## `createDraft( $draft )`
+
+```perl
+$bsky->createDraft( { posts => [ { text => 'Unfinished thought...' } ] } );
+```
+
+Insert a draft. Returns the creation response, including the draft `id`.
+
+## `updateDraft( $draft )`
+
+```perl
+$bsky->updateDraft( { id => $id, draft => { posts => [ ... ] } } );
+```
+
+Update a draft. Updates to unknown IDs are silently ignored.
+
+## `deleteDraft( $id )`
+
+```
+$bsky->deleteDraft( $id );
+```
+
+Delete a draft by ID.
+
+# Contacts
+
+Methods in this section deal with secure contact-import matching (all require auth).
+
+## `getContactMatches( [...] )`
+
+```
+$bsky->getContactMatches();
+```
+
+Return matched contacts (mutually imported, excluding dismissed matches). Returns the `matches` arrayref.
+
+## `getContactSyncStatus( )`
+
+```
+$bsky->getContactSyncStatus();
+```
+
+Get the user's current contact import status.
+
+## `importContacts( ... )`
+
+```perl
+$bsky->importContacts( token => $token, contacts => [ '+12125550123' ] );
+```
+
+Import contacts for secure matching. `$token` comes from ["verifyPhone"](#verifyphone). Returns matched contacts with their
+input indexes. See [https://docs.bsky.app/blog/contact-import-rfc](https://docs.bsky.app/blog/contact-import-rfc).
+
+## `dismissContactMatch( $subject )`
+
+```
+$bsky->dismissContactMatch( 'did:plc:...' );
+```
+
+Dismiss a contact match so it no longer appears, even on re-import.
+
+## `removeContactData( )`
+
+```
+$bsky->removeContactData();
+```
+
+Remove all stored contact-matching hashes, matches, and sync status.
+
+## `startPhoneVerification( $phone )`
+
+```
+$bsky->startPhoneVerification( '+12125550123' );
+```
+
+Start a phone verification flow; the phone receives an SMS code for ["verifyPhone"](#verifyphone).
+
+## `verifyPhone( $phone, $code )`
+
+```perl
+my $token = $bsky->verifyPhone( '+12125550123', '123456' );
+```
+
+Verify control over a phone number and start a contact import session. Returns a single-use token for
+["importContacts"](#importcontacts).
+
+# Age Assurance
+
+Methods in this section deal with Age Assurance.
+
+## `beginAgeAssurance( ... )`
+
+```perl
+$bsky->beginAgeAssurance( email => 'me@example.com', language => 'en', countryCode => 'US' );
+```
+
+Initiate Age Assurance for the account. Requires `email`, `language`, and `countryCode`.
+
+## `getAgeAssuranceConfig( )`
+
+```
+$bsky->getAgeAssuranceConfig();
+```
+
+Return Age Assurance configuration for use on the client.
+
+## `getAgeAssuranceState( ... )`
+
+```perl
+$bsky->getAgeAssuranceState( countryCode => 'US' );
+```
+
+Return the server-computed Age Assurance state. `countryCode` is required.
 
 # Utilities and Upload Helpers
 

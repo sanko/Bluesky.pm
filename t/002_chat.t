@@ -1,5 +1,6 @@
 use v5.40;
 use Test2::V0;
+use blib;
 use lib 'lib';
 use lib '../At.pm/lib';
 use Bluesky;
@@ -7,8 +8,7 @@ use Bluesky;
 # Mock At module
 my $mock_at = mock 'At' => (
     override => [
-        get => sub {
-            my ( $self, $method, $params ) = @_;
+        get => sub ( $self, $method, $params ) {
             if ( $method eq 'chat.bsky.convo.listConvos' ) {
                 return { convos => [ { id => 'convo1', members => [] } ] };
             }
@@ -17,11 +17,10 @@ my $mock_at = mock 'At' => (
             }
             return {};
         },
-        post => sub {
-            my ( $self, $method, $data ) = @_;
+        post => sub ( $self, $method, $data ) {
             return { success => 1 };
         },
-        did => sub {'did:plc:test'},
+        did => sub {'did:plc:test'}
     ],
 );
 my $bsky = Bluesky->new();

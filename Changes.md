@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- New feed methods: `getListFeed` (`app.bsky.feed.getListFeed`), `sendInteractions` (`app.bsky.feed.sendInteractions`).
+- New social graph methods: `getListBlocks`, `getListMutes`, `getListsWithMembership`, `getStarterPacksWithMembership`, `getSuggestedFollowsByActor`, `searchStarterPacks`.
+- New notification methods: `getNotificationPreferences`, `putNotificationPreferences`, `putNotificationPreferencesV2`, `listActivitySubscriptions`, `putActivitySubscription`, `registerPush`, `unregisterPush`.
+- New video service methods: `getVideoUploadLimits`, `getVideoJobStatus`, `uploadVideoJob` (`app.bsky.video.uploadVideo`).
+- New drafts support: `getDrafts`, `createDraft`, `updateDraft`, `deleteDraft`.
+- New contact-import support: `getContactMatches`, `getContactSyncStatus`, `importContacts`, `dismissContactMatch`, `removeContactData`, `startPhoneVerification`, `verifyPhone`.
+- New age assurance support: `beginAgeAssurance`, `getAgeAssuranceConfig`, `getAgeAssuranceState`.
+- New label lookup: `queryLabels` (`com.atproto.label.queryLabels`).
+- Documented new `posts_with_video` filter value for `getAuthorFeed`.
+
 ### Fixed
 - Documentation. Like, in general.
 
