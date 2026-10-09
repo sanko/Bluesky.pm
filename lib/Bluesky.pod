@@ -37,9 +37,33 @@ L<At> can remain mostly technical.
 
 Bluesky.pm is my attempt to make use of Perl's class syntax so this is obviously OO.
 
-=head2 C<new( ... )>
+=head2 C<new( [...] )>
 
-    my $bsky = Bluesky->new( 'sanko', '1111-2222-3333-4444' );
+    my $bsky = Bluesky->new( );
+
+Create a new Bluesky client object.
+
+Expected parameters include:
+
+=over
+
+=item C<service> - optional
+
+Bluesky PDS host. Defaults to C<https://bsky.social>.
+
+=item C<chat_service> - optional
+
+Chat (DM) service host. Defaults to C<https://api.bsky.chat>.
+
+=item C<at> - optional
+
+Underlying L<At> object. If not provided, it defaults to C<At->new( host => $service )>.
+
+=back
+
+=head2 C<login( $identifier, $password )>
+
+    $bsky->login( 'sanko', '1111-2222-3333-4444' );
 
 Expected parameters include:
 
@@ -56,9 +80,29 @@ L<https://bsky.app/settings/app-passwords>.
 
 =back
 
+=head2 C<resume( $accessJwt, $refreshJwt, [ $token_type, ... ] )>
+
+    $bsky->resume( $accessJwt, $refreshJwt );
+
+Restores a session from existing tokens. Delegates to L<At/resume>.
+
+=head2 C<session( )>
+
+    my $session = $bsky->session();
+
+Returns the underlying L<At> session data.
+
+=head2 C<did( )>
+
+    my $did = $bsky->did();
+
+Returns the DID of the authenticated user, if any.
+
 =head2 C<oauth_start( $handle, $client_id, $redirect_uri, [ $scope ] )>
 
 Initiates the OAuth 2.0 Authorization Code flow. Returns the authorization URL.
+
+C<$scope> defaults to C<atproto> if omitted.
 
     my $url = $bsky->oauth_start(
         'user.bsky.social',
@@ -95,7 +139,7 @@ The user's handle or DID.
 
 =item C<listen>
 
-Boolean. If true, attempts to start a local HTTP server (using L<Mojolicious::Lite>) to automatically capture the
+Boolean. If true, attempts to start a local HTTP server (using L<Mojolicious>) to automatically capture the
 C<code> and C<state> from the redirect.
 
 =item C<redirect>
@@ -104,7 +148,7 @@ The redirect URI. Defaults to C<http://127.0.0.1:8888/callback>.
 
 =item C<scope>
 
-The requested OAuth scopes. Defaults to C<atproto chat.bsky.convo>.
+The requested OAuth scopes. Defaults to C<atproto transition:generic transition:chat.bsky>.
 
 =item C<on_success>
 
@@ -174,17 +218,18 @@ Default: C<50>, Minimum: C<1>, Maximum: C<100>.
 
 =back
 
-=head2 C<getFeed( ... )>
+=head2 C<getFeed( $feed, [...] )>
 
     $bsky->getFeed( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/3l6oveex3ii2l' );
 
-Get a hydrated feed from a feed generator.
+Get a hydrated feed from a feed generator. C<$feed> is the feed generator AT-URI. Returns the C<feed> arrayref.
 
-=head2 C<getFeedSkeleton( ... )>
+=head2 C<getFeedSkeleton( $feed, [...] )>
 
     $bsky->getFeedSkeleton( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/3l6oveex3ii2l' );
 
-Get a feed skeleton (list of URIs) from a feed generator.
+Get a feed skeleton (list of URIs) from a feed generator. C<$feed> is the feed generator AT-URI. Returns the C<feed>
+arrayref.
 
 =head2 C<getAuthorFeed( ... )>
 
@@ -264,18 +309,6 @@ Default: C<80>, Minimum: C<0>, Maximum: C<1000>.
 =back
 
 Returns an error if the thread cannot be found.
-
-=head2 C<getFeed( ... )>
-
-    $bsky->getFeed( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/3l6oveex3ii2l' );
-
-Get a hydrated feed from a feed generator.
-
-=head2 C<getFeedSkeleton( ... )>
-
-    $bsky->getFeedSkeleton( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/3l6oveex3ii2l' );
-
-Get a feed skeleton (list of URIs) from a feed generator.
 
 =head2 C<getPost( ... )>
 
@@ -718,34 +751,24 @@ If undefined, the post is fetched to gather this for you.
 
 Remove a repost record.
 
-=head2 C<uploadBlob( ... )>
+=head2 C<uploadBlob( $data, [...] )>
 
     $bsky->uploadBlob( $data, mime_type => 'image/png' );
 
-Upload a blob (file/data) to the PDS. This is a wrapper around C<uploadFile>.
+Upload a blob (file/data) to the PDS. Delegates to C<$bsky-E<gt>at-E<gt>upload_blob>. See also L</uploadFile>.
 
 =head1 Social Graph
 
 Methods documented in this section deal with relationships between the authorized user and other members of the social
 network.
 
-=head2 C<block( ... )>
+=head2 C<block( $actor )>
 
     $bsky->block( 'sankorobinson.com' );
 
-Blocks a user.
+Blocks a user. C<$actor> is the handle or DID of the person you'd like to block.
 
-Expected parameters include:
-
-=over
-
-=item C<identifier> - required
-
-Handle or DID of the person you'd like to block.
-
-=back
-
-=head2 C<getBlocks( ... )>
+=head2 C<getBlocks( [...] )>
 
     $bsky->getBlocks( );
 
@@ -756,10 +779,6 @@ Requires auth.
 Expected parameters include:
 
 =over
-
-=item C<uri>
-
-AT-URI of the subject (eg, a post record).
 
 =item C<limit>
 
@@ -809,11 +828,12 @@ Enumerates who is following an account.
 
 Enumerates followers of an account that the authorized user also follows (mutuals).
 
-=head2 C<getRelationships( ... )>
+=head2 C<getRelationships( [...] )>
 
     $bsky->getRelationships( actors => ['sankorobinson.com', 'bsky.app'] );
 
-Enumerates relationships between the authorized user and other actors.
+Enumerates relationships between the authorized user and other actors. C<actors> is accepted as an alias for
+C<others>; C<actor> defaults to the authenticated DID if omitted.
 
 =head2 C<getMutes( ... )>
 
@@ -851,9 +871,12 @@ Get detailed view of a moderation list.
 
 Get a detailed view of a starter pack.
 
-=head2 C<getStarterPacks( ... )>
+=head2 C<getStarterPacks( @uris )>
 
-    $bsky->getStarterPacks( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.starterpack/3l6oveex3ii2l' );
+    $bsky->getStarterPacks(
+        'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.starterpack/3l6oveex3ii2l',
+        'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.starterpack/3l6oveex3ii2m'
+    );
 
 Get views for a list of starter packs.
 
@@ -953,37 +976,9 @@ Blocks all actors in a moderation list.
 
 Unblocks a moderation list.
 
-=head2 C<getProfile( $actor )>
-
-    my $profile = $bsky->getProfile( 'sankorobinson.com' );
-
-Returns a detailed view of an actor's profile.
-
-=head2 C<getProfiles( actors =E<gt> [ ... ] )>
-
-    my $profiles = $bsky->getProfiles( actors => [ 'did:plc:...', 'sankorobinson.com' ] );
-
-Returns an arrayref of detailed profile views for the requested actors.
-
-=head2 C<getSuggestions( [...] )>
-
-    my $suggestions = $bsky->getSuggestions();
-
-Returns an arrayref of suggested actors to follow.
-
 =head1 Moderation
 
-=head2 C<mute( ... )>
-
-    $bsky->mute( 'sankorobinson.com' );
-
-Mutes an actor.
-
-=head2 C<unmute( ... )>
-
-    $bsky->unmute( 'sankorobinson.com' );
-
-Unmutes an actor.
+Submits reports and manages moderation artifacts. For muting/blocking actors and lists, see L</Actors>.
 
 =head2 C<report( $subject, $reason_type, [ $reason ] )>
 
@@ -1151,6 +1146,64 @@ Check if the authorized user can join conversations.
 
 Get a log of chat events.
 
+=head1 Utilities and Upload Helpers
+
+Helper methods used internally by L</createPost> and available for advanced use.
+
+=head2 C<parse_mentions( $text )>
+
+Returns a list of C<{ start =E<gt> ..., end =E<gt> ..., handle =E<gt> ... }> spans for @-mentions in C<$text>.
+
+=head2 C<parse_urls( $text )>
+
+Returns a list of C<{ start =E<gt> ..., end =E<gt> ..., url =E<gt> ... }> spans for URLs in C<$text>.
+
+=head2 C<parse_tags( $text )>
+
+Returns a list of C<{ start =E<gt> ..., end =E<gt> ..., tag =E<gt> ... }> spans for #-tags in C<$text>.
+
+=head2 C<parse_facets( $text )>
+
+Resolves mentions, URLs, and tags in C<$text> into an array of C<app.bsky.richtext.facet> structures.
+
+=head2 C<parse_uri( $uri )>
+
+    my $parts = $bsky->parse_uri( 'at://did:plc:.../app.bsky.feed.post/3l6oveex3ii2l' );
+
+Returns C<{ repo =E<gt> ..., collection =E<gt> ..., rkey =E<gt> ... }> for an AT-URI.
+
+=head2 C<getReplyRefs( $parent_uri )>
+
+Fetches parent (and root, if the parent is itself a reply) records and returns C<{ root =E<gt> ..., parent =E<gt> ... }>
+strong refs suitable for C<app.bsky.feed.post> replies.
+
+=head2 C<uploadFile( $bytes_or_path, [ $mime_type ] )>
+
+Reads a file, Path::Tiny object, or raw bytes and uploads it via C<com.atproto.repo.uploadBlob> using L<HTTP::Tiny>
+directly. Returns the blob on success.
+
+=head2 C<uploadImages( @images )>
+
+Uploads up to 4 images (paths, raw bytes, Path::Tiny objects, or C<{ image =E<gt> ..., alt =E<gt> ..., mime =E<gt> ... }>
+hashrefs) and returns an C<app.bsky.embed.images> structure.
+
+=head2 C<uploadVideoCaption( $lang, $caption )>
+
+Uploads a WebVTT caption file and returns an C<app.bsky.embed.video#caption> structure.
+
+=head2 C<uploadVideo( $video )>
+
+Uploads a video (path, raw bytes, Path::Tiny object, or hashref with C<video>, C<alt>, C<mime>, C<aspectRatio>, and
+C<captions>) and returns an C<app.bsky.embed.video> structure.
+
+=head2 C<getEmbedRef( $uri )>
+
+Fetches a record and returns an C<app.bsky.embed.record> structure linking to it.
+
+=head2 C<fetch_embed_url_card( $url )>
+
+Fetches C<$url>, extracts title/description/thumbnail, and returns an C<app.bsky.embed.external> structure.
+
 =head1 See Also
 
 L<At> - AT Protocol library
@@ -1174,7 +1227,7 @@ This library is free software; you can redistribute it and/or modify it under th
 
 =head1 AUTHOR
 
-Sanko Robinson E<lt>sanko@cpan.orgE<gt>
+Sanko Robinson - L<https://github.com/sanko>
 
 =begin stopwords
 

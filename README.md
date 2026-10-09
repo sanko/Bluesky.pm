@@ -35,10 +35,32 @@ You shouldn't need to know the AT protocol in order to get things done so I'm in
 
 Bluesky.pm is my attempt to make use of Perl's class syntax so this is obviously OO.
 
-## `new( ... )`
+## `new( [...] )`
 
 ```perl
-my $bsky = Bluesky->new( 'sanko', '1111-2222-3333-4444' );
+my $bsky = Bluesky->new( );
+```
+
+Create a new Bluesky client object.
+
+Expected parameters include:
+
+- `service` - optional
+
+    Bluesky PDS host. Defaults to `https://bsky.social`.
+
+- `chat_service` - optional
+
+    Chat (DM) service host. Defaults to `https://api.bsky.chat`.
+
+- `at` - optional
+
+    Underlying [At](https://metacpan.org/pod/At) object. If not provided, it defaults to `At-`new( host => $service )>.
+
+## `login( $identifier, $password )`
+
+```
+$bsky->login( 'sanko', '1111-2222-3333-4444' );
 ```
 
 Expected parameters include:
@@ -52,9 +74,35 @@ Expected parameters include:
     This is the app password not the account's password. App passwords are generated at
     [https://bsky.app/settings/app-passwords](https://bsky.app/settings/app-passwords).
 
+## `resume( $accessJwt, $refreshJwt, [ $token_type, ... ] )`
+
+```
+$bsky->resume( $accessJwt, $refreshJwt );
+```
+
+Restores a session from existing tokens. Delegates to ["resume" in At](https://metacpan.org/pod/At#resume).
+
+## `session( )`
+
+```perl
+my $session = $bsky->session();
+```
+
+Returns the underlying [At](https://metacpan.org/pod/At) session data.
+
+## `did( )`
+
+```perl
+my $did = $bsky->did();
+```
+
+Returns the DID of the authenticated user, if any.
+
 ## `oauth_start( $handle, $client_id, $redirect_uri, [ $scope ] )`
 
 Initiates the OAuth 2.0 Authorization Code flow. Returns the authorization URL.
+
+`$scope` defaults to `atproto` if omitted.
 
 ```perl
 my $url = $bsky->oauth_start(
@@ -95,7 +143,7 @@ Expected parameters include:
 
 - `listen`
 
-    Boolean. If true, attempts to start a local HTTP server (using [Mojolicious::Lite](https://metacpan.org/pod/Mojolicious%3A%3ALite)) to automatically capture the
+    Boolean. If true, attempts to start a local HTTP server (using [Mojolicious](https://metacpan.org/pod/Mojolicious)) to automatically capture the
     `code` and `state` from the redirect.
 
 - `redirect`
@@ -104,7 +152,7 @@ Expected parameters include:
 
 - `scope`
 
-    The requested OAuth scopes. Defaults to `atproto chat.bsky.convo`.
+    The requested OAuth scopes. Defaults to `atproto transition:generic transition:chat.bsky`.
 
 - `on_success`
 
@@ -170,21 +218,22 @@ Expected parameters include:
 
 - `cursor`
 
-## `getFeed( ... )`
+## `getFeed( $feed, [...] )`
 
 ```
 $bsky->getFeed( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/3l6oveex3ii2l' );
 ```
 
-Get a hydrated feed from a feed generator.
+Get a hydrated feed from a feed generator. `$feed` is the feed generator AT-URI. Returns the `feed` arrayref.
 
-## `getFeedSkeleton( ... )`
+## `getFeedSkeleton( $feed, [...] )`
 
 ```
 $bsky->getFeedSkeleton( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/3l6oveex3ii2l' );
 ```
 
-Get a feed skeleton (list of URIs) from a feed generator.
+Get a feed skeleton (list of URIs) from a feed generator. `$feed` is the feed generator AT-URI. Returns the `feed`
+arrayref.
 
 ## `getAuthorFeed( ... )`
 
@@ -252,22 +301,6 @@ Expected parameters include:
     Default: `80`, Minimum: `0`, Maximum: `1000`.
 
 Returns an error if the thread cannot be found.
-
-## `getFeed( ... )`
-
-```
-$bsky->getFeed( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/3l6oveex3ii2l' );
-```
-
-Get a hydrated feed from a feed generator.
-
-## `getFeedSkeleton( ... )`
-
-```
-$bsky->getFeedSkeleton( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/3l6oveex3ii2l' );
-```
-
-Get a feed skeleton (list of URIs) from a feed generator.
 
 ## `getPost( ... )`
 
@@ -722,34 +755,28 @@ $bsky->deleteRepost( 'at://did:plc:pwqewimhd3rxc4hg6ztwrcyj/app.bsky.feed.repost
 
 Remove a repost record.
 
-## `uploadBlob( ... )`
+## `uploadBlob( $data, [...] )`
 
 ```perl
 $bsky->uploadBlob( $data, mime_type => 'image/png' );
 ```
 
-Upload a blob (file/data) to the PDS. This is a wrapper around `uploadFile`.
+Upload a blob (file/data) to the PDS. Delegates to `$bsky->at->upload_blob`. See also ["uploadFile"](#uploadfile).
 
 # Social Graph
 
 Methods documented in this section deal with relationships between the authorized user and other members of the social
 network.
 
-## `block( ... )`
+## `block( $actor )`
 
 ```
 $bsky->block( 'sankorobinson.com' );
 ```
 
-Blocks a user.
+Blocks a user. `$actor` is the handle or DID of the person you'd like to block.
 
-Expected parameters include:
-
-- `identifier` - required
-
-    Handle or DID of the person you'd like to block.
-
-## `getBlocks( ... )`
+## `getBlocks( [...] )`
 
 ```
 $bsky->getBlocks( );
@@ -760,10 +787,6 @@ Enumerates which accounts the requesting account is currently blocking.
 Requires auth.
 
 Expected parameters include:
-
-- `uri`
-
-    AT-URI of the subject (eg, a post record).
 
 - `limit`
 
@@ -823,13 +846,14 @@ $bsky->getKnownFollowers( 'sankorobinson.com' );
 
 Enumerates followers of an account that the authorized user also follows (mutuals).
 
-## `getRelationships( ... )`
+## `getRelationships( [...] )`
 
 ```perl
 $bsky->getRelationships( actors => ['sankorobinson.com', 'bsky.app'] );
 ```
 
-Enumerates relationships between the authorized user and other actors.
+Enumerates relationships between the authorized user and other actors. `actors` is accepted as an alias for
+`others`; `actor` defaults to the authenticated DID if omitted.
 
 ## `getMutes( ... )`
 
@@ -879,10 +903,13 @@ $bsky->getStarterPack( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.sta
 
 Get a detailed view of a starter pack.
 
-## `getStarterPacks( ... )`
+## `getStarterPacks( @uris )`
 
 ```
-$bsky->getStarterPacks( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.starterpack/3l6oveex3ii2l' );
+$bsky->getStarterPacks(
+    'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.starterpack/3l6oveex3ii2l',
+    'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.starterpack/3l6oveex3ii2m'
+);
 ```
 
 Get views for a list of starter packs.
@@ -1013,47 +1040,9 @@ $bsky->unblockModList( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.lis
 
 Unblocks a moderation list.
 
-## `getProfile( $actor )`
-
-```perl
-my $profile = $bsky->getProfile( 'sankorobinson.com' );
-```
-
-Returns a detailed view of an actor's profile.
-
-## `getProfiles( actors => [ ... ] )`
-
-```perl
-my $profiles = $bsky->getProfiles( actors => [ 'did:plc:...', 'sankorobinson.com' ] );
-```
-
-Returns an arrayref of detailed profile views for the requested actors.
-
-## `getSuggestions( [...] )`
-
-```perl
-my $suggestions = $bsky->getSuggestions();
-```
-
-Returns an arrayref of suggested actors to follow.
-
 # Moderation
 
-## `mute( ... )`
-
-```
-$bsky->mute( 'sankorobinson.com' );
-```
-
-Mutes an actor.
-
-## `unmute( ... )`
-
-```
-$bsky->unmute( 'sankorobinson.com' );
-```
-
-Unmutes an actor.
+Submits reports and manages moderation artifacts. For muting/blocking actors and lists, see ["Actors"](#actors).
 
 ## `report( $subject, $reason_type, [ $reason ] )`
 
@@ -1261,6 +1250,66 @@ $bsky->getLog();
 
 Get a log of chat events.
 
+# Utilities and Upload Helpers
+
+Helper methods used internally by ["createPost"](#createpost) and available for advanced use.
+
+## `parse_mentions( $text )`
+
+Returns a list of `{ start => ..., end => ..., handle => ... }` spans for @-mentions in `$text`.
+
+## `parse_urls( $text )`
+
+Returns a list of `{ start => ..., end => ..., url => ... }` spans for URLs in `$text`.
+
+## `parse_tags( $text )`
+
+Returns a list of `{ start => ..., end => ..., tag => ... }` spans for #-tags in `$text`.
+
+## `parse_facets( $text )`
+
+Resolves mentions, URLs, and tags in `$text` into an array of `app.bsky.richtext.facet` structures.
+
+## `parse_uri( $uri )`
+
+```perl
+my $parts = $bsky->parse_uri( 'at://did:plc:.../app.bsky.feed.post/3l6oveex3ii2l' );
+```
+
+Returns `{ repo => ..., collection => ..., rkey => ... }` for an AT-URI.
+
+## `getReplyRefs( $parent_uri )`
+
+Fetches parent (and root, if the parent is itself a reply) records and returns `{ root => ..., parent => ... }`
+strong refs suitable for `app.bsky.feed.post` replies.
+
+## `uploadFile( $bytes_or_path, [ $mime_type ] )`
+
+Reads a file, Path::Tiny object, or raw bytes and uploads it via `com.atproto.repo.uploadBlob` using [HTTP::Tiny](https://metacpan.org/pod/HTTP%3A%3ATiny)
+directly. Returns the blob on success.
+
+## `uploadImages( @images )`
+
+Uploads up to 4 images (paths, raw bytes, Path::Tiny objects, or `{ image => ..., alt => ..., mime => ... }`
+hashrefs) and returns an `app.bsky.embed.images` structure.
+
+## `uploadVideoCaption( $lang, $caption )`
+
+Uploads a WebVTT caption file and returns an `app.bsky.embed.video#caption` structure.
+
+## `uploadVideo( $video )`
+
+Uploads a video (path, raw bytes, Path::Tiny object, or hashref with `video`, `alt`, `mime`, `aspectRatio`, and
+`captions`) and returns an `app.bsky.embed.video` structure.
+
+## `getEmbedRef( $uri )`
+
+Fetches a record and returns an `app.bsky.embed.record` structure linking to it.
+
+## `fetch_embed_url_card( $url )`
+
+Fetches `$url`, extracts title/description/thumbnail, and returns an `app.bsky.embed.external` structure.
+
 # See Also
 
 [At](https://metacpan.org/pod/At) - AT Protocol library
@@ -1284,4 +1333,4 @@ This library is free software; you can redistribute it and/or modify it under th
 
 # AUTHOR
 
-Sanko Robinson <sanko@cpan.org>
+Sanko Robinson - [https://github.com/sanko](https://github.com/sanko)
