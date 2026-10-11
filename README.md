@@ -8,10 +8,13 @@ Bluesky - Bluesky Client Library in Perl
 use Bluesky;
 my $bsky = Bluesky->new( );
 
-# Interactive OAuth Authentication (Recommended)
+# Recommended: log in once and reuse the saved session on later runs
+$bsky->ensure_auth( handle => 'user.bsky.social' );
+
+# Or drive the interactive OAuth flow directly:
 $bsky->oauth_helper(
-    handle => 'user.bsky.social',
-    listen => 1, # Automatically catch the redirect
+    handle     => 'user.bsky.social',
+    listen     => 1, # Automatically catch the redirect
     on_success => sub { say 'Logged in!' }
 );
 
@@ -55,7 +58,7 @@ Expected parameters include:
 
 - `at` - optional
 
-    Underlying [At](https://metacpan.org/pod/At) object. If not provided, it defaults to `At-`new( host => $service )>.
+    Underlying [At](https://metacpan.org/pod/At) object. If not provided, it defaults to `At->new( host =` $service )>.
 
 ## `login( $identifier, $password )`
 
@@ -98,6 +101,60 @@ my $did = $bsky->did();
 
 Returns the DID of the authenticated user, if any.
 
+## `save_session( [ $file ] )`
+
+```
+$bsky->save_session();    # writes session.json
+```
+
+Serializes the current session to `$file` (default `session.json`) so it can be restored later with `load_session`
+or `ensure_auth`. Does nothing, with a warning, when there is no active session.
+
+## `load_session( [ $file ] )`
+
+```
+$bsky->load_session();
+```
+
+Reads a previously saved session from `$file` (default `session.json`) and resumes it. Returns false when the file
+does not exist or cannot be parsed.
+
+## `ensure_auth( %args )`
+
+```perl
+$bsky->ensure_auth( handle => 'you.bsky.social' );
+```
+
+Convenience wrapper for applications that want to stay logged in across runs. When `file` exists it loads and resumes
+the saved session (re-saving it if the underlying tokens were rotated); otherwise it runs an interactive OAuth flow via
+`oauth_helper` and saves the resulting session.
+
+Expected parameters include:
+
+- `file`
+
+    Path to the session file. Defaults to `session.json`.
+
+- `handle`
+
+    The user's handle or DID. Required when no saved session exists.
+
+- `scope`
+
+    Requested OAuth scopes. Defaults to `atproto`.
+
+- `listen`
+
+    Passed through to `oauth_helper`. Defaults to `1`.
+
+- `client_id`, `redirect`
+
+    Optional OAuth overrides, passed through to `oauth_helper`.
+
+- `on_success`
+
+    Optional callback invoked after a successful first-time login. Receives the `$bsky` object.
+
 ## `oauth_start( $handle, $client_id, $redirect_uri, [ $scope ] )`
 
 Initiates the OAuth 2.0 Authorization Code flow. Returns the authorization URL.
@@ -111,6 +168,9 @@ my $url = $bsky->oauth_start(
     'http://127.0.0.1:8888/callback'
 );
 ```
+
+The `$scope` here defaults to simply '`atproto`'. See [https://atproto.com/guides/scope-builder](https://atproto.com/guides/scope-builder) to build your own
+scope strings.
 
 ## `oauth_callback( $code, $state )`
 
@@ -143,8 +203,8 @@ Expected parameters include:
 
 - `listen`
 
-    Boolean. If true, attempts to start a local HTTP server (using [Mojolicious](https://metacpan.org/pod/Mojolicious)) to automatically capture the
-    `code` and `state` from the redirect.
+    Boolean. If true, attempts to start a local HTTP server (using [Mojolicious](https://metacpan.org/pod/Mojolicious)) to automatically capture the `code` and
+    `state` from the redirect.
 
 - `redirect`
 
@@ -152,7 +212,9 @@ Expected parameters include:
 
 - `scope`
 
-    The requested OAuth scopes. Defaults to `atproto transition:generic transition:chat.bsky`.
+    The requested OAuth scopes. Defaults to `atproto`.
+
+    See [https://atproto.com/guides/scope-builder](https://atproto.com/guides/scope-builder) to build your own scope strings.
 
 - `on_success`
 
@@ -241,8 +303,8 @@ arrayref.
 $bsky->getListFeed( 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.graph.list/3l6oveex3ii2l' );
 ```
 
-Get a feed of recent posts from a list (posts and reposts from any actors on the list). Does not require auth.
-Returns the `feed` arrayref.
+Get a feed of recent posts from a list (posts and reposts from any actors on the list). Does not require auth. Returns
+the `feed` arrayref.
 
 ## `sendInteractions( [...] )`
 
@@ -489,6 +551,8 @@ Expected parameters include:
 
     The primary post content. May be an empty string, if there are embeds.
 
+    The lexicon limits text to 300 graphemes (3000 bytes).
+
     Annotations of text (mentions, URLs, hashtags, etc) are automatically parsed. These include:
 
     - mentions
@@ -522,11 +586,15 @@ Expected parameters include:
 
     Client-declared timestamp (ISO 8601 in UTC) when this post was originally created.
 
+    A timezone is required and a trailing `Z` is preferred over `+00:00`, per
+    [https://atproto.com/specs/lexicon#string-formats](https://atproto.com/specs/lexicon#string-formats). Clients may supply any value (useful for imports and migration),
+    but far-future values sort first everywhere.
+
     Defaults to the current time.
 
 - `lang`
 
-    Indicates human language of post primary text content.
+    Indicates human language of post primary text content. Up to 3 language codes.
 
     ```perl
     $bsky->createPost(
@@ -552,11 +620,14 @@ Expected parameters include:
 
 - `reply_gate`
 
-    Arrayref of rules to restrict who can reply to this post.
+    Arrayref of rules to restrict who can reply to this post (thread gate). At most 5 rules.
+
+    An empty arrayref means nobody can reply; omitting `reply_gate` means anybody can reply.
 
     Supported rules:
 
     - `mention` - Only users mentioned in the post can reply.
+    - `follower` - Only users following the author can reply.
     - `following` - Only users the author follows can reply.
     - `list` - Only users in a specific moderation list can reply (requires `reply_gate_list`).
 
@@ -592,7 +663,7 @@ Expected parameters include:
 
     - `images`
 
-        Up to 4 images (path name or raw data).
+        Up to 4 images (path name or raw data), each limited to 1,000,000 bytes.
 
         Set alt text by passing a hash.
 
@@ -681,11 +752,11 @@ Expected parameters include:
 
 - `labels`
 
-    Self-label values for this post. Effectively content warnings.
+    Self-label values for this post. Effectively content warnings. Up to 10 values.
 
 - `tags`
 
-    Additional hashtags, in addition to any included in post text and facets.
+    Additional hashtags, in addition to any included in post text and facets. Up to 8 tags.
 
     These are not visible in the current Bluesky interface but do cause posts to return as results to to search (such as
     [https://bsky.app/hashtag/perl](https://bsky.app/hashtag/perl).
@@ -780,7 +851,8 @@ Remove a repost record.
 $bsky->uploadBlob( $data, mime_type => 'image/png' );
 ```
 
-Upload a blob (file/data) to the PDS. Delegates to `$bsky->at->upload_blob`. See also ["uploadFile"](#uploadfile).
+Upload a blob (file/data) to the PDS. See also ["uploadFile( $bytes\_or\_path, \[ $mime\_type \] )"](#uploadfile-bytes_or_path-mime_type); it delegates to
+`$bsky->at->upload_blob`.
 
 # Social Graph
 
@@ -871,8 +943,8 @@ Enumerates followers of an account that the authorized user also follows (mutual
 $bsky->getRelationships( actors => ['sankorobinson.com', 'bsky.app'] );
 ```
 
-Enumerates relationships between the authorized user and other actors. `actors` is accepted as an alias for
-`others`; `actor` defaults to the authenticated DID if omitted.
+Enumerates relationships between the authorized user and other actors. `actors` is accepted as an alias for `others`;
+`actor` defaults to the authenticated DID if omitted.
 
 ## `getMutes( ... )`
 
@@ -1174,8 +1246,8 @@ Set notification-related preferences for the account. Requires auth.
 $bsky->putNotificationPreferencesV2( like => { list => 1, push => 1, include => 'follows' } );
 ```
 
-Set granular notification preferences (chat, like, quote, reply, follow, repost, mention, etc). Requires auth.
-Returns the updated `preferences`.
+Set granular notification preferences (chat, like, quote, reply, follow, repost, mention, etc). Requires auth. Returns
+the updated `preferences`.
 
 ## `listActivitySubscriptions( [...] )`
 
@@ -1407,15 +1479,27 @@ $bsky->getVideoJobStatus( $jobId );
 
 Get status details for a video processing job. Returns the `jobStatus`.
 
-## `uploadVideoJob( $bytes_or_path, [ $mime_type ] )`
+## `uploadVideoJob( $bytes_or_path, [ $mime_type, %opts ] )`
 
-```
-$bsky->uploadVideoJob( 'path/to/clip.mp4' );
+```perl
+$bsky->uploadVideoJob( 'path/to/clip.mp4', 'video/mp4', did => $bsky->did, name => 'clip.mp4' );
 ```
 
-Upload a video to the video service (`app.bsky.video.uploadVideo`) for processing. Returns the `jobStatus`.
-Unlike ["uploadVideo"](#uploadvideo), which uploads a finished blob for embedding, this starts a server-side processing job;
-poll ["getVideoJobStatus"](#getvideojobstatus) until it completes.
+Upload a video to the video service (`app.bsky.video.uploadVideo`) for processing. Returns the `jobStatus`; poll
+["getVideoJobStatus( $jobId )"](#getvideojobstatus-jobid) until `blob` is present, then use that blob in a post.
+
+Optional `%opts`:
+
+- `did` and `name` - Identifying query params accepted by the video service.
+- `host` - Service host. Defaults to the PDS host (which proxies to the video service); set to
+`video.bsky.app` to talk to the video service directly (with a service auth token, see below).
+
+Unlike ["uploadVideo( $video )"](#uploadvideo-video), which uploads a finished blob for embedding, this starts a server-side processing
+job. The recommended flow from [https://bsky.network/docs/about-bluesky-content/video](https://bsky.network/docs/about-bluesky-content/video) is: create a service token for
+`com.atproto.repo.uploadBlob`, upload to the video service, poll the job for its `blob`, then post. If the video was
+already processed, the job reports an `already_exists` error yet still returns the usable `blob`, so always check for
+`blob` regardless of job state. Note that Bluesky-hosted accounts must verify their email before uploading video, and
+daily video limits apply (see ["getVideoUploadLimits( )"](#getvideouploadlimits)).
 
 # Drafts
 
@@ -1479,8 +1563,8 @@ Get the user's current contact import status.
 $bsky->importContacts( token => $token, contacts => [ '+12125550123' ] );
 ```
 
-Import contacts for secure matching. `$token` comes from ["verifyPhone"](#verifyphone). Returns matched contacts with their
-input indexes. See [https://docs.bsky.app/blog/contact-import-rfc](https://docs.bsky.app/blog/contact-import-rfc).
+Import contacts for secure matching. `$token` comes from ["verifyPhone( $phone, $code )"](#verifyphone-phone-code). Returns matched contacts
+with their input indexes. See [https://docs.bsky.app/blog/contact-import-rfc](https://docs.bsky.app/blog/contact-import-rfc).
 
 ## `dismissContactMatch( $subject )`
 
@@ -1504,7 +1588,7 @@ Remove all stored contact-matching hashes, matches, and sync status.
 $bsky->startPhoneVerification( '+12125550123' );
 ```
 
-Start a phone verification flow; the phone receives an SMS code for ["verifyPhone"](#verifyphone).
+Start a phone verification flow; the phone receives an SMS code for ["verifyPhone( $phone, $code )"](#verifyphone-phone-code).
 
 ## `verifyPhone( $phone, $code )`
 
@@ -1513,7 +1597,7 @@ my $token = $bsky->verifyPhone( '+12125550123', '123456' );
 ```
 
 Verify control over a phone number and start a contact import session. Returns a single-use token for
-["importContacts"](#importcontacts).
+["importContacts( ... )"](#importcontacts).
 
 # Age Assurance
 
@@ -1545,7 +1629,7 @@ Return the server-computed Age Assurance state. `countryCode` is required.
 
 # Utilities and Upload Helpers
 
-Helper methods used internally by ["createPost"](#createpost) and available for advanced use.
+Helper methods used internally by ["createPost( ... )"](#createpost) and available for advanced use.
 
 ## `parse_mentions( $text )`
 
@@ -1563,6 +1647,10 @@ Returns a list of `{ start => ..., end => ..., tag => ... }` spans for #-tags in
 
 Resolves mentions, URLs, and tags in `$text` into an array of `app.bsky.richtext.facet` structures.
 
+Facet indexes are byte offsets into the UTF-8 encoding (inclusive start, exclusive end), not character offsets; this
+module enables [bytes](https://metacpan.org/pod/bytes) internally so the offsets come out correctly. Facets must not overlap. See
+[https://bsky.network/docs/about-bluesky-content/post-richtext](https://bsky.network/docs/about-bluesky-content/post-richtext).
+
 ## `parse_uri( $uri )`
 
 ```perl
@@ -1573,8 +1661,8 @@ Returns `{ repo => ..., collection => ..., rkey => ... }` for an AT-URI.
 
 ## `getReplyRefs( $parent_uri )`
 
-Fetches parent (and root, if the parent is itself a reply) records and returns `{ root => ..., parent => ... }`
-strong refs suitable for `app.bsky.feed.post` replies.
+Fetches parent (and root, if the parent is itself a reply) records and returns `{ root => ..., parent => ...
+}` strong refs suitable for `app.bsky.feed.post` replies.
 
 ## `uploadFile( $bytes_or_path, [ $mime_type ] )`
 
@@ -1583,8 +1671,8 @@ directly. Returns the blob on success.
 
 ## `uploadImages( @images )`
 
-Uploads up to 4 images (paths, raw bytes, Path::Tiny objects, or `{ image => ..., alt => ..., mime => ... }`
-hashrefs) and returns an `app.bsky.embed.images` structure.
+Uploads up to 4 images (paths, raw bytes, Path::Tiny objects, or `{ image => ..., alt => ..., mime => ...
+}` hashrefs) and returns an `app.bsky.embed.images` structure.
 
 ## `uploadVideoCaption( $lang, $caption )`
 

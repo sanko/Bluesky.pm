@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-10
+
 ### Added
 - New feed methods: `getListFeed` (`app.bsky.feed.getListFeed`), `sendInteractions` (`app.bsky.feed.sendInteractions`).
 - New social graph methods: `getListBlocks`, `getListMutes`, `getListsWithMembership`, `getStarterPacksWithMembership`, `getSuggestedFollowsByActor`, `searchStarterPacks`.
@@ -17,8 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New age assurance support: `beginAgeAssurance`, `getAgeAssuranceConfig`, `getAgeAssuranceState`.
 - New label lookup: `queryLabels` (`com.atproto.label.queryLabels`).
 - Documented new `posts_with_video` filter value for `getAuthorFeed`.
+- `follower` rule for `createPost` thread gates (`reply_gate`), per the official thread gates guide.
+- `uploadVideoJob` accepts `did`, `name`, and `host` options for the video-service upload flow.
+- Session persistence helpers: `save_session`, `load_session`, and `ensure_auth` (resumes a saved session when present, otherwise runs OAuth and persists the result).
+- Mock-based unit tests covering every network-mockable method (`t/004_full.t`), plus session-persistence tests (`t/005_session.t`).
+- Local `eg/` demos: `feed.pl`, `graph.pl`, `chat.pl`, `media.pl`, and `drafts.pl`; each authenticates through `ensure_auth`.
+
+### Changed
+- Test suite migrated from `Test::More` to `Test2::V0`.
 
 ### Fixed
+- `uploadVideo` now throws the server error on upload failure instead of returning early.
+- `uploadFile`, `uploadImages`, `uploadVideo`, and `uploadVideoJob` now treat file paths as files on Windows (the filename guard was rejecting real paths containing `:` or `\`) and propagate the actual upload error instead of a generic "upload failed".
 - Documentation. Like, in general.
 
 ## [1.01] - 2026-03-12
@@ -77,7 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Split from At.pm.
 
-[Unreleased]: https://github.com/sanko/Bluesky.pm/compare/1.01...HEAD
+[Unreleased]: https://github.com/sanko/Bluesky.pm/compare/1.6.0...HEAD
+[1.6.0]: https://github.com/sanko/Bluesky.pm/compare/1.01...1.6.0
 [1.01]: https://github.com/sanko/Bluesky.pm/compare/1.00...1.01
 [1.00]: https://github.com/sanko/Bluesky.pm/compare/0.20...1.00
 [0.20]: https://github.com/sanko/Bluesky.pm/compare/0.19...0.20

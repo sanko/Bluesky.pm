@@ -1,4 +1,4 @@
-package Bluesky v1.5.0 {
+package Bluesky v1.6.0 {
     use v5.40;
     use Carp qw[carp];
     use bytes;
@@ -50,8 +50,8 @@ package Bluesky v1.5.0 {
             my $redirect_uri = $args{redirect} // 'http://127.0.0.1:8888/callback';
 
             # Transitional scopes for chat access via PDS proxy
-            my $scope      = $args{scope}      // 'atproto transition:generic transition:chat.bsky';
-            my $on_success = $args{on_success} // sub { say 'Success! Session established.' };
+            my $scope      = $args{scope}      // 'atproto';
+            my $on_success = $args{on_success} // sub {1};
 
             # Build the magic localhost Client ID manually to ensure %20 encoding for spaces
             require URI::Escape;
@@ -68,8 +68,9 @@ package Bluesky v1.5.0 {
                 # Attempt to start a local server to catch the callback
                 try {
                     require Mojolicious;
-                    my $app  = Mojolicious->new();
-                    my $port = 8888;
+                    my $app    = Mojolicious->new();
+                    my $port   = 8888;
+                    my $daemon;
                     $port = $1 if $redirect_uri =~ /:(\d+)/;
                     my $path = URI->new($redirect_uri)->path || '/';
                     $app->routes->get($path)->to(
@@ -85,7 +86,7 @@ package Bluesky v1.5.0 {
 
                                     # Stop loop after response
                                     require Mojo::IOLoop;
-                                    Mojo::IOLoop->timer( 1 => sub { exit 0 } );
+                                    Mojo::IOLoop->timer( 1 => sub { $daemon->stop if defined $daemon; Mojo::IOLoop->stop if Mojo::IOLoop->can('stop'); } );
                                 }
                                 catch ($e) {
                                     $c->render( text => 'OAuth Callback failed: ' . $e, status => 500 );
@@ -102,9 +103,9 @@ package Bluesky v1.5.0 {
                     require Mojo::Server::Daemon;
 
                     # Listen on all interfaces but specific to the redirect_uri port
-                    my $daemon = Mojo::Server::Daemon->new( app => $app, listen => [ 'http://127.0.0.1:' . $port ] );
+                    $daemon = Mojo::Server::Daemon->new( app => $app, listen => [ 'http://127.0.0.1:' . $port ] );
                     $daemon->run();
-                    return;    # Exit method if listener ran (it blocks until finished or exits)
+                    return $self;    # Listener ran (blocks until finished); control returns after stop
                 }
                 catch ($e) {
                     warn "Could not start listener: $e\nFalling back to manual input.\n";
@@ -132,6 +133,110 @@ package Bluesky v1.5.0 {
         method session ()                       { $self->at->session; }
         #
         method did() { $self->at->did }
+
+        # Session persistence
+        method save_session ( $file = 'session.json' ) {
+            my $session = $self->at->session;
+            if ( !$session ) {
+                carp 'No active session to save';
+                return;
+            }
+            my $data;
+            if ( builtin::blessed $session ) {
+                try {
+                    my $raw = $session->_raw;
+                    if ( ref($raw) eq 'HASH' ) {
+                        $data = {%$raw};
+                    }
+                    elsif ( defined $raw ) {
+
+                        # maybe it returned something odd, try list
+                        my @kvs = $session->_raw();
+                        $data = {@kvs} if scalar @kvs;
+                    }
+                }
+                catch ($e) {
+                    $data = undef;
+                }
+                if ( !$data ) {
+                    try {
+                        $data = +{ $session->_raw };
+                    }
+                    catch ($e) {
+                        $data = undef;
+                    }
+                }
+                $data ||= {%$session};
+            }
+            elsif ( ref($session) eq 'HASH' ) {
+                $data = {%$session};
+            }
+            unless ($data) {
+                carp 'Cannot serialize session of type ' . ( ref $session || 'non-reference' );
+                return;
+            }
+            path($file)->spew_raw( JSON::PP->new->ascii->pretty->allow_nonref->encode($data) );
+            $self;
+        }
+
+        method load_session ( $file = 'session.json' ) {
+            return unless -e $file;
+            my $config;
+            try {
+                $config = JSON::PP::decode_json( path($file)->slurp_raw );
+            }
+            catch ($e) {
+                return;
+            }
+            return unless $config && ref($config) eq 'HASH';
+            return $self->resume( map { $config->{$_} } qw[accessJwt refreshJwt token_type dpop_key_jwk client_id handle pds scope] );
+        }
+
+        method ensure_auth (%args) {
+            my $file   = $args{file} // 'session.json';
+            my $handle = $args{handle};
+            my $scope  = $args{scope} // 'atproto';
+            if ( -e $file ) {
+                my $ok = 0;
+                try {
+                    $self->load_session($file);
+                    $ok = 1;
+                }
+                catch ($e) {
+                    $ok = 0;
+                }
+                my $probe;
+                try {
+                    $probe = $self->at->session;
+                }
+                catch ($e) {
+                    $probe = undef;
+                }
+                if ( $ok && $probe && !$self->_session_is_error($probe) ) {
+
+                    # resume() already rotated expired tokens; persist the current session
+                    try { $self->save_session($file) } catch ($e) {
+                    }
+                    return $self;
+                }
+            }
+            $handle or die 'ensure_auth: no saved session found and no handle given; pass handle => "you.bsky.social" for first-time auth';
+            my %helper = ( handle => $handle, scope => $scope, listen => $args{listen} // 1 );
+            $helper{client_id}  = $args{client_id} if defined $args{client_id};
+            $helper{redirect}   = $args{redirect}  if defined $args{redirect};
+            $helper{on_success} = sub {
+                $self->save_session($file);
+                $args{on_success}->($self) if $args{on_success};
+            };
+            $self->oauth_helper(%helper);
+            $self;
+        }
+
+        method _session_is_error ($session) {
+            return 0 unless builtin::blessed $session;
+            return 1 if $session->can('isa') && $session->isa('At::Error');
+            return 0;
+        }
 
         # Feeds and content
         method getTrendingTopics(%args) {
@@ -311,6 +416,7 @@ package Bluesky v1.5.0 {
                 if ( ref $args{reply_gate} eq 'ARRAY' ) {
                     for my $type ( @{ $args{reply_gate} } ) {
                         if    ( $type eq 'mention' )   { push @allow, { '$type' => 'app.bsky.feed.threadgate#mentionRule' }; }
+                        elsif ( $type eq 'follower' )  { push @allow, { '$type' => 'app.bsky.feed.threadgate#followerRule' }; }
                         elsif ( $type eq 'following' ) { push @allow, { '$type' => 'app.bsky.feed.threadgate#followingRule' }; }
                         elsif ( $type eq 'list' ) { push @allow, { '$type' => 'app.bsky.feed.threadgate#listRule', list => $args{reply_gate_list} }; }
                     }
@@ -707,19 +813,42 @@ package Bluesky v1.5.0 {
             $res ? $res->{jobStatus} // () : $res;
         }
 
-        method uploadVideoJob( $bytes, $mime_type = 'video/mp4' ) {
+        method uploadVideoJob( $bytes, $mime_type = 'video/mp4', %opts ) {
             if    ( builtin::blessed $bytes ) { $bytes = $bytes->slurp_raw }
-            elsif ( ( $^O eq 'MSWin32' ? $bytes !~ m/[\x00<>:"\/\\|?*]/ : 1 ) && -e $bytes ) {
+            elsif ( !ref $bytes && $bytes !~ /[\x00-\x1f]/ && -e $bytes ) {
                 $bytes = path($bytes)->slurp_raw;
             }
             my $at_http = $self->at->http;
-            my $url     = sprintf( '%s/xrpc/%s', $self->at->host, 'app.bsky.video.uploadVideo' );
+            my $url     = sprintf( '%s/xrpc/%s', $opts{host} // $self->at->host, 'app.bsky.video.uploadVideo' );
+
+            # The video service accepts identifying query params (e.g. did, name)
+            if ( $opts{did} // $opts{name} ) {
+                require URI::Escape;
+                $url .= '?' . join( '&', map { "$_=" . URI::Escape::uri_escape( $opts{$_} ) } grep { defined $opts{$_} } qw[did name] );
+            }
             my %headers = ( 'Content-Type' => $mime_type, ( $at_http->auth ? ( 'Authorization' => $at_http->auth ) : () ), );
             $headers{DPoP} = $at_http->_generate_dpop_proof( $url, 'POST' ) if $at_http->token_type eq 'DPoP';
             state $http //= HTTP::Tiny->new;
-            my $res     = $http->post( $url, { content => $bytes, headers => \%headers } );
+            my $res = $http->post( $url, { content => $bytes, headers => \%headers } );
             my $content = $res->{content};
-
+            # Retry on DPoP nonce issues
+            if ( !$res->{success} ) {
+                my $body = $content;
+                if ( $body && !ref $body && ( $res->{status} == 401 || $res->{status} == 400 ) ) {
+                    if ( $body =~ /use_dpop_nonce|dpop_nonce|required nonce|nonce in dpop|DPoP.*nonce/i && $at_http && $at_http->can('dpop_nonce') ) {
+                        my $nonce;
+                        foreach my $k (keys %{$res->{headers}}) {
+                            if (lc($k) eq 'dpop-nonce') { $nonce = $res->{headers}{$k}; last; }
+                        }
+                        $at_http->dpop_nonce($nonce) if defined $nonce && $nonce ne '';
+                        if ( $at_http && $at_http->can('_generate_dpop_proof') ) {
+                            $headers{DPoP} = $at_http->_generate_dpop_proof( $url, 'POST' );
+                        }
+                        $res = $http->post( $url, { content => $bytes, headers => \%headers } );
+                        $content = $res->{content};
+                    }
+                }
+            }
             if ( $res->{success} ) {
                 $content = decode_json($content) if $content && ( $res->{headers}{'content-type'} // '' ) =~ m[json];
                 return $content->{jobStatus} // $content;
@@ -870,7 +999,7 @@ package Bluesky v1.5.0 {
 
         method uploadFile( $bytes, $mime_type //= undef ) {
             if    ( builtin::blessed $bytes ) { $bytes = $bytes->slurp_raw }
-            elsif ( ( $^O eq 'MSWin32' ? $bytes !~ m/[\x00<>:"\/\\|?*]/ : 1 ) && -e $bytes ) {
+            elsif ( !ref $bytes && $bytes !~ /[\x00-\x1f]/ && -e $bytes ) {
                 $bytes = path($bytes)->slurp_raw;
             }
 
@@ -889,12 +1018,34 @@ package Bluesky v1.5.0 {
                     'application/octet-stream' );
             my $at_http = $self->at->http;
             my $url     = sprintf( '%s/xrpc/%s', $self->at->host, 'com.atproto.repo.uploadBlob' );
-            my %headers = ( 'Content-Type' => $determined_mime, ( $at_http->auth ? ( 'Authorization' => $at_http->auth ) : () ), );
-            $headers{DPoP} = $at_http->_generate_dpop_proof( $url, 'POST' ) if $at_http->token_type eq 'DPoP';
+            my %headers = ( 'Content-Type' => $determined_mime );
+            if ( $at_http && $at_http->can('auth') && $at_http->auth ) {
+                $headers{'Authorization'} = $at_http->auth;
+            }
+            if ( $at_http && $at_http->can('token_type') && $at_http->token_type eq 'DPoP' && $at_http->can('_generate_dpop_proof') ) {
+                $headers{DPoP} = $at_http->_generate_dpop_proof( $url, 'POST' );
+            }
             state $http //= HTTP::Tiny->new;
-            my $res     = $http->post( $url, { content => $bytes, headers => \%headers } );
+            my $res = $http->post( $url, { content => $bytes, headers => \%headers } );
             my $content = $res->{content};
-
+            # Retry on DPoP nonce issues
+            if ( !$res->{success} ) {
+                my $body = $content;
+                if ( $body && !ref $body && ( $res->{status} == 401 || $res->{status} == 400 ) ) {
+                    if ( $body =~ /use_dpop_nonce|dpop_nonce|required nonce|nonce in dpop|DPoP.*nonce/i && $at_http && $at_http->can('dpop_nonce') ) {
+                        my $nonce;
+                        foreach my $k (keys %{$res->{headers}}) {
+                            if (lc($k) eq 'dpop-nonce') { $nonce = $res->{headers}{$k}; last; }
+                        }
+                        $at_http->dpop_nonce($nonce) if defined $nonce && $nonce ne '';
+                        if ( $at_http && $at_http->can('_generate_dpop_proof') ) {
+                            $headers{DPoP} = $at_http->_generate_dpop_proof( $url, 'POST' );
+                        }
+                        $res = $http->post( $url, { content => $bytes, headers => \%headers } );
+                        $content = $res->{content};
+                    }
+                }
+            }
             if ( $res->{success} ) {
                 $content = decode_json($content) if $content && ( $res->{headers}{'content-type'} // '' ) =~ m[json];
                 return $content->{blob};
@@ -917,46 +1068,42 @@ package Bluesky v1.5.0 {
                     $mime = $img->{mime} // ();
                     $img  = $img->{image};
                 }
-                if ( builtin::blessed $img ) {
-                    At::Error->new( message => 'image file size too large. 1000000 bytes maximum, got: ' . $img->size )->throw
-                        if $img->size > 1000000;
+                if ( builtin::blessed $img && $img->can('slurp_raw') ) {
+                    my $sz = $img->can('size') ? $img->size : length( $img->slurp_raw );
+                    At::Error->new( message => 'image file size too large. 1000000 bytes maximum, got: ' . $sz )->throw if $sz > 1000000;
                     $img = $img->slurp_raw;
                 }
-                elsif ( ( $^O eq 'MSWin32' ? $img !~ m/[\x00<>:"\/\\|?*]/ : 1 ) && -e $img ) {
-                    $img = path($img);
-                    At::Error->new( message => 'image file size too large. 1000000 bytes maximum, got: ' . $img->size )->throw
-                        if $img->size > 1000000;
-                    $img = path($img)->slurp_raw;
+                elsif ( !ref $img && $img !~ /[\x00-\x1f]/ && -e $img ) {
+                    my $p  = path($img);
+                    my $sz = $p->size;
+                    At::Error->new( message => 'image file size too large. 1000000 bytes maximum, got: ' . $sz )->throw if $sz > 1000000;
+                    $img = $p->slurp_raw;
                 }
                 else {
-                    At::Error->new( message => 'image file size too large. 1000000 bytes maximum, got: ' . length $img )->throw
-                        if length $img > 1000000;
+                    my $sz = length $img;
+                    At::Error->new( message => 'image file size too large. 1000000 bytes maximum, got: ' . $sz )->throw if $sz > 1000000;
                 }
                 my $blob = $self->uploadFile( $img, $mime );
-                $blob || $blob->throw;
+                builtin::blessed($blob) && $blob->isa('At::Error') ? $blob->throw : ();
+                $blob || At::Error->new( message => 'upload failed', fatal => 1 )->throw;
                 push @ret, { alt => $alt, image => $blob };
             }
             { '$type' => 'app.bsky.embed.images', images => \@ret };
         }
 
         method uploadVideoCaption( $lang, $caption ) {
-            if ( builtin::blessed $caption ) {
-                At::Error->new( message => 'caption file size too large. 20000 bytes maximum, got: ' . $caption->size )->throw
-                    if $caption->size > 20000;
+            if ( builtin::blessed $caption && $caption->can('slurp_raw') ) {
+                my $sz = $caption->can('size') ? $caption->size : length( $caption->slurp_raw );
+                At::Error->new( message => 'caption file size too large. 20000 bytes maximum, got: ' . $sz )->throw if $sz > 20000;
                 $caption = $caption->slurp_raw;
             }
-            elsif ( ( $^O eq 'MSWin32' ? $caption !~ m/[\x00<>:"\/\\|?*]/ : 1 ) && -e $caption ) {
-                $caption = path($caption);
-                At::Error->new( message => 'caption file size too large. 20000 bytes maximum, got: ' . $caption->size )->throw
-                    if $caption->size > 20000;
-                $caption = path($caption)->slurp_raw;
-            }
             else {
-                At::Error->new( message => 'cation file size too large. 20000 bytes maximum, got: ' . length $caption )->throw
-                    if length $caption > 20000;
+                my $sz = length $caption;
+                At::Error->new( message => 'caption file size too large. 20000 bytes maximum, got: ' . $sz )->throw if $sz > 20000;
             }
             my $blob = $self->uploadFile( $caption, 'text/vtt' );
-            $blob || $blob->throw;
+            builtin::blessed($blob) && $blob->isa('At::Error') ? $blob->throw : ();
+            $blob || At::Error->new( message => 'upload failed', fatal => 1 )->throw;
             { '$type' => 'app.bsky.embed.video#caption', lang => $lang, file => $blob };
         }
 
@@ -971,21 +1118,23 @@ package Bluesky v1.5.0 {
                 @captions    = map { { lang => $_, file => $self->uploadFile( $vid->{captions}{$_}, 'text/vtt' ) } } keys %{ $vid->{captions} };
                 $vid         = $vid->{video};
             }
-            if ( builtin::blessed $vid ) {
-                At::Error->new( message => 'video file size too large. 50000000 bytes maximum, got: ' . $vid->size )->throw if $vid->size > 50000000;
+            if ( builtin::blessed $vid && $vid->can('slurp_raw') ) {
+                my $szv = $vid->can('size') ? $vid->size : length( $vid->slurp_raw );
+                At::Error->new( message => 'video file size too large. 50000000 bytes maximum, got: ' . $szv )->throw if $szv > 50000000;
                 $vid = $vid->slurp_raw;
             }
-            elsif ( ( $^O eq 'MSWin32' ? $vid !~ m/[\x00<>:"\/\\|?*]/ : 1 ) && -e $vid ) {
-                $vid = path($vid);
-                At::Error->new( message => 'video file size too large. 50000000 bytes maximum, got: ' . $vid->size )->throw if $vid->size > 50000000;
-                $vid = path($vid)->slurp_raw;
+            elsif ( !ref $vid && $vid !~ /[\x00-\x1f]/ && -e $vid ) {
+                my $pv = path($vid);
+                At::Error->new( message => 'video file size too large. 50000000 bytes maximum, got: ' . $pv->size )->throw if $pv->size > 50000000;
+                $vid = $pv->slurp_raw;
             }
             else {
                 At::Error->new( message => 'video file size too large. 50000000 bytes maximum, got: ' . length $vid )->throw
                     if length $vid > 50000000;
             }
             my $blob = $self->uploadFile( $vid, $mime );
-            $blob || return $blob->throw;
+            builtin::blessed($blob) && $blob->isa('At::Error') ? $blob->throw : ();
+            $blob || At::Error->new( message => 'upload failed', fatal => 1 )->throw;
             return {
                 '$type' => 'app.bsky.embed.video',
                 video   => $blob,
