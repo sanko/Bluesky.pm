@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `chat.pl`: list conversations, print one conversation's messages, optionally send a reply, and mark it read.
   - `drafts.pl`: a full draft round-trip: create, list, update, and delete.
   - `feed.pl`: read the home timeline and a post thread, then like/unlike a post.
+  - `firehose.pl`: stream live events from the AT Protocol firehose (requires Mojo::UserAgent).
   - `graph.pl`: a follow/unfollow round-trip, follows and followers, relationships, a handle's lists (plus the first list's feed), and starter packs.
   - `hi.pl`: a minimal 'Hello, World' that resumes and refreshes a saved session (or runs interactive OAuth itself) and posts a short text post.
   - `media.pl`: post an image embed, a gallery embed, and a video uploaded through the video service (with alt, `aspectRatio`, captions, and presentation).
