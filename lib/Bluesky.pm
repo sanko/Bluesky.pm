@@ -192,7 +192,19 @@ class Bluesky v1.8.0 {
             return;
         }
         return unless $config && ref($config) eq 'HASH';
-        return $self->resume( map { $config->{$_} } qw[accessJwt refreshJwt token_type dpop_key_jwk client_id handle pds scope] );
+        my $result = $self->resume( map { $config->{$_} } qw[accessJwt refreshJwt token_type dpop_key_jwk client_id handle pds scope] );
+
+        # resume() consumes the one-time-use refresh token whenever the access
+        # token has expired. Write the rotated session back so the next run does
+        # not replay the spent token (which would force a fresh interactive login).
+        if ( $result && !$self->_session_is_error($result) ) {
+            my $active = eval { $self->at->session };
+            if ( $active && !$self->_session_is_error($active) ) {
+                try { $self->save_session($file) } catch ($e) {
+                }
+            }
+        }
+        return $result;
     }
 
     method ensure_auth (%args) {

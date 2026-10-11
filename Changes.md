@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `getVideoUploadLimits` and `getVideoJobStatus` now use the video-service host and service token as well, so they work with OAuth (DPoP) sessions.
 - `uploadVideo` now throws the server error on upload failure instead of returning early.
 - `uploadFile`, `uploadImages`, `uploadVideo`, and `uploadVideoJob` now treat file paths as files on Windows (the filename guard was rejecting real paths containing `:` or `\`) and propagate the actual upload error instead of a generic "upload failed".
+- `load_session` now writes the session back after a successful `resume`, so refreshing an expired access token can no longer consume the one-time-use refresh token without persisting the replacement (which previously forced a fresh interactive login on the next run).
 - Documentation. Like, in general.
 
 ## [1.01] - 2026-03-12
