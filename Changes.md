@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `drafts.pl`: a full draft round-trip: create, list, update, and delete.
   - `feed.pl`: read the home timeline and a post thread, then like/unlike a post.
   - `graph.pl`: a follow/unfollow round-trip, follows and followers, relationships, a handle's lists (plus the first list's feed), and starter packs.
+  - `hi.pl`: a minimal 'Hello, World' that resumes and refreshes a saved session (or runs interactive OAuth itself) and posts a short text post.
   - `media.pl`: post an image embed, a gallery embed, and a video uploaded through the video service (with alt, `aspectRatio`, captions, and presentation).
   - `videoupload.pl`: a focused video-service upload that polls `getVideoJobStatus` until the processed blob is ready.
 
