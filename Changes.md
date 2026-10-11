@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Video upload now targets the video service host (`https://video.bsky.app`) and authenticates with a short-lived service token minted via `com.atproto.server.getServiceAuth`, sent as a plain `Bearer` token. `uploadVideoJob` previously posted to the PDS with the session's DPoP token, which returns `501 Method Not Implemented`. The `did`/`name` query parameters and return value (`jobStatus`, including `409 AlreadyExists`) are unchanged.
+
+### Fixed
+- `getVideoUploadLimits` and `getVideoJobStatus` now use the video-service host and service token as well, so they work with OAuth (DPoP) sessions.
+
 ## [1.6.0] - 2026-10-10
 
 ### Added

@@ -1490,16 +1490,26 @@ Upload a video to the video service (`app.bsky.video.uploadVideo`) for processin
 
 Optional `%opts`:
 
-- `did` and `name` - Identifying query params accepted by the video service.
-- `host` - Service host. Defaults to the PDS host (which proxies to the video service); set to
-`video.bsky.app` to talk to the video service directly (with a service auth token, see below).
+- `did` and `name` - Identifying query params accepted by the video service. `did` defaults to the authenticated user.
+- `host` - Service host. Defaults to `https://video.bsky.app`.
+- `token` - Pre-minted service token to send as a `Bearer` token. By default one is fetched from the PDS with
+`com.atproto.server.getServiceAuth`.
+- `aud` and `exp` - Override the audience (defaults to the user's PDS DID) and expiry of the minted service token.
+
+The video service cannot be reached through the PDS: `uploadVideo` posts the bytes to
+`https://video.bsky.app/xrpc/app.bsky.video.uploadVideo` with an `Authorization: Bearer` service token (_not_ the
+session's DPoP token). The token is minted by the user's PDS via `com.atproto.server.getServiceAuth` with the PDS DID
+as the audience and `com.atproto.repo.uploadBlob` as the lexicon, because the service deposits the processed blob into
+your PDS on your behalf. ["getVideoUploadLimits( )"](#getvideouploadlimits) and ["getVideoJobStatus( $jobId )"](#getvideojobstatus-jobid) use the video service host
+too.
 
 Unlike ["uploadVideo( $video )"](#uploadvideo-video), which uploads a finished blob for embedding, this starts a server-side processing
 job. The recommended flow from [https://bsky.network/docs/about-bluesky-content/video](https://bsky.network/docs/about-bluesky-content/video) is: create a service token for
-`com.atproto.repo.uploadBlob`, upload to the video service, poll the job for its `blob`, then post. If the video was
-already processed, the job reports an `already_exists` error yet still returns the usable `blob`, so always check for
-`blob` regardless of job state. Note that Bluesky-hosted accounts must verify their email before uploading video, and
-daily video limits apply (see ["getVideoUploadLimits( )"](#getvideouploadlimits)).
+`com.atproto.repo.uploadBlob`, upload to the video service, poll the job for its `blob`, then post. The `uploadVideo`
+reply is the job status: if it already carries a `blob` use it directly, otherwise poll ["getVideoJobStatus( $jobId )"](#getvideojobstatus-jobid)
+until `blob` is present. If the video was already processed the service reports an `already_exists` error (HTTP `409`),
+and the returned job may need to be polled to obtain its `blob`. Note that Bluesky-hosted accounts must verify their
+email before uploading video, and daily video limits apply (see ["getVideoUploadLimits( )"](#getvideouploadlimits)).
 
 # Drafts
 

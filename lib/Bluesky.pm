@@ -8,12 +8,14 @@ package Bluesky v1.6.0 {
     use Path::Tiny;
     use HTTP::Tiny;
     use URI;
+    use URI::Escape;
     use JSON::PP;
     #
     class Bluesky {
-        field $service      : param //= 'https://bsky.social';
-        field $chat_service : param //= 'https://api.bsky.chat';
-        field $at           : reader = At->new( host => $service );
+        field $service       : param //= 'https://bsky.social';
+        field $chat_service  : param //= 'https://api.bsky.chat';
+        field $video_service : param : reader //= 'https://video.bsky.app';
+        field $at            : reader = At->new( host => $service );
         #
         method _at_for ($method) {
             if ( $method =~ /^chat\.bsky\./ ) {
@@ -803,62 +805,104 @@ package Bluesky v1.6.0 {
         }
         method getLog(%args) { $self->_at_for('chat.bsky.convo.getLog')->get( 'chat.bsky.convo.getLog' => \%args ) }
 
-        # Video services
-        method getVideoUploadLimits() {
-            $self->_at_for('app.bsky.video.getUploadLimits')->get('app.bsky.video.getUploadLimits');
+        # Video services (https://atproto.com/guides/video-handling)
+        #
+        # Video processing lives on a sidecar service (video.bsky.app), not on the
+        # PDS. Each call is authenticated with a short-lived service token minted
+        # by the user's PDS via com.atproto.server.getServiceAuth, then sent as a
+        # plain "Bearer" token. The session's DPoP token is NOT used here, which
+        # is why posting video to the PDS returns 501 Method Not Implemented.
+
+        method _video_http() { state $http //= HTTP::Tiny->new; $http }
+
+        # did:web form of the user's PDS. Used as the audience for the token that
+        # lets the video service deposit the processed blob in our PDS.
+        method _pds_did() {
+            my $session = eval { $self->at->session };
+            my $pds     = ( builtin::blessed $session && $session->can('pds') ? $session->pds : undef ) // $self->at->host;
+            $pds = $pds . '';
+            $pds =~ s{^https?://}{};
+            $pds =~ s{/.*$}{};
+            $pds =~ s{:}{%3A}g;    # did:web encodes the port separator
+            'did:web:' . $pds;
         }
 
-        method getVideoJobStatus($jobId) {
-            my $res = $self->_at_for('app.bsky.video.getJobStatus')->get( 'app.bsky.video.getJobStatus' => { jobId => $jobId } );
-            $res ? $res->{jobStatus} // () : $res;
+        # Mint a service token for the given audience/lexicon. Returns the token
+        # string, or an At::Error which callers should propagate.
+        method _service_token ( $aud, $lxm, $exp = undef ) {
+            my $res = $self->at->get( 'com.atproto.server.getServiceAuth' => { aud => $aud, lxm => $lxm, exp => ( $exp // ( time + 1800 ) ) } );
+            return $res                      if builtin::blessed $res;
+            return $res->{token}             if ref $res eq 'HASH' && defined $res->{token};
+            At::Error->new( message => 'getServiceAuth did not return a token', fatal => 1 );
         }
 
-        method uploadVideoJob( $bytes, $mime_type = 'video/mp4', %opts ) {
+        method _video_url ( $lexicon, %query ) {
+            my $url   = "$video_service/xrpc/$lexicon";
+            my @pairs = map { "$_=" . URI::Escape::uri_escape( $query{$_} ) } grep { defined $query{$_} } sort keys %query;
+            @pairs ? "$url?" . join( '&', @pairs ) : $url;
+        }
+
+        method _video_error ( $res, $content ) {
+            my $msg = $res->{reason} // 'Unknown error';
+            if ( ref $content eq 'HASH' ) {
+                my $detail = $content->{message} // $content->{error};
+                $msg = $detail . ' (' . $msg . ')' if defined $detail && $detail ne $msg;
+            }
+            At::Error->new( message => $msg, fatal => 1 );
+        }
+
+        # The video service wraps job data in a "jobStatus" key; unwrap it when
+        # present, otherwise return the payload untouched.
+        method _unwrap_job ($content) {
+            return $content unless ref $content eq 'HASH';
+            $content->{jobStatus} // $content;
+        }
+
+        method getVideoUploadLimits () {
+            my $token = $self->_service_token( 'did:web:video.bsky.app', 'app.bsky.video.getUploadLimits' );
+            return $token if builtin::blessed $token;
+            my $res = $self->_video_http->get( $self->_video_url('app.bsky.video.getUploadLimits'),
+                { headers => { Authorization => "Bearer $token", Accept => 'application/json' } } );
+            my $content = $res->{content};
+            $content = decode_json($content) if defined $content && !ref $content && ( $res->{headers}{'content-type'} // '' ) =~ m[json];
+            $res->{success} ? $self->_unwrap_job($content) : $self->_video_error( $res, $content );
+        }
+
+        method getVideoJobStatus ( $jobId, %opts ) {
+            my $token = $opts{token} // $self->_service_token( 'did:web:video.bsky.app', 'app.bsky.video.getJobStatus', $opts{exp} );
+            return $token if builtin::blessed $token;
+            my $res = $self->_video_http->get( $self->_video_url( 'app.bsky.video.getJobStatus', jobId => $jobId ),
+                { headers => { Authorization => "Bearer $token", Accept => 'application/json' } } );
+            my $content = $res->{content};
+            $content = decode_json($content) if defined $content && !ref $content && ( $res->{headers}{'content-type'} // '' ) =~ m[json];
+            return $self->_video_error( $res, $content ) unless $res->{success};
+            $self->_unwrap_job($content);
+        }
+
+        method uploadVideoJob ( $bytes, $mime_type = 'video/mp4', %opts ) {
             if    ( builtin::blessed $bytes ) { $bytes = $bytes->slurp_raw }
             elsif ( !ref $bytes && $bytes !~ /[\x00-\x1f]/ && -e $bytes ) {
                 $bytes = path($bytes)->slurp_raw;
             }
-            my $at_http = $self->at->http;
-            my $url     = sprintf( '%s/xrpc/%s', $opts{host} // $self->at->host, 'app.bsky.video.uploadVideo' );
+            $opts{did} //= $self->did;
+            my $base  = $opts{host} // $video_service;
+            my $query = join( '&',
+                map { "$_=" . URI::Escape::uri_escape( $opts{$_} ) } grep { defined $opts{$_} } qw[did name] );
+            my $url = "$base/xrpc/app.bsky.video.uploadVideo" . ( $query ? "?$query" : '' );
 
-            # The video service accepts identifying query params (e.g. did, name)
-            if ( $opts{did} // $opts{name} ) {
-                require URI::Escape;
-                $url .= '?' . join( '&', map { "$_=" . URI::Escape::uri_escape( $opts{$_} ) } grep { defined $opts{$_} } qw[did name] );
-            }
-            my %headers = ( 'Content-Type' => $mime_type, ( $at_http->auth ? ( 'Authorization' => $at_http->auth ) : () ), );
-            $headers{DPoP} = $at_http->_generate_dpop_proof( $url, 'POST' ) if $at_http->token_type eq 'DPoP';
-            state $http //= HTTP::Tiny->new;
-            my $res = $http->post( $url, { content => $bytes, headers => \%headers } );
+            # uploadVideo writes into the PDS on our behalf, so the token audience
+            # is the PDS and the lexicon is uploadBlob, not uploadVideo.
+            my $token = $opts{token} // $self->_service_token( $opts{aud} // $self->_pds_did, 'com.atproto.repo.uploadBlob', $opts{exp} );
+            return $token if builtin::blessed $token;
+            my $res = $self->_video_http->post( $url,
+                { content => $bytes, headers => { Authorization => "Bearer $token", 'Content-Type' => $mime_type } } );
             my $content = $res->{content};
-            # Retry on DPoP nonce issues
-            if ( !$res->{success} ) {
-                my $body = $content;
-                if ( $body && !ref $body && ( $res->{status} == 401 || $res->{status} == 400 ) ) {
-                    if ( $body =~ /use_dpop_nonce|dpop_nonce|required nonce|nonce in dpop|DPoP.*nonce/i && $at_http && $at_http->can('dpop_nonce') ) {
-                        my $nonce;
-                        foreach my $k (keys %{$res->{headers}}) {
-                            if (lc($k) eq 'dpop-nonce') { $nonce = $res->{headers}{$k}; last; }
-                        }
-                        $at_http->dpop_nonce($nonce) if defined $nonce && $nonce ne '';
-                        if ( $at_http && $at_http->can('_generate_dpop_proof') ) {
-                            $headers{DPoP} = $at_http->_generate_dpop_proof( $url, 'POST' );
-                        }
-                        $res = $http->post( $url, { content => $bytes, headers => \%headers } );
-                        $content = $res->{content};
-                    }
-                }
-            }
-            if ( $res->{success} ) {
-                $content = decode_json($content) if $content && ( $res->{headers}{'content-type'} // '' ) =~ m[json];
-                return $content->{jobStatus} // $content;
-            }
-            my $msg = $res->{reason} // 'Unknown error';
-            if ( $content && ( $res->{headers}{'content-type'} // '' ) =~ m[json] ) {
-                my $json = decode_json($content);
-                $msg .= ': ' . $json->{message} if $json->{message};
-            }
-            return At::Error->new( message => $msg, fatal => 1 );
+            $content = decode_json($content) if defined $content && !ref $content && ( $res->{headers}{'content-type'} // '' ) =~ m[json];
+
+            # 409 Conflict means the video was already processed; the body still
+            # carries a usable jobStatus (including the finished blob).
+            return $self->_video_error( $res, $content ) unless $res->{success} || $res->{status} == 409;
+            $self->_unwrap_job($content);
         }
 
         # Drafts (private post drafts via stash)
