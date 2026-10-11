@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v1.8.0] - 2026-10-11
 
 ### Added
 - `uploadGallery` builds `app.bsky.embed.gallery` embeds, and `createPost` accepts `embed => { gallery => [ ... ] }`. Each item supports `image`, `alt`, and `aspectRatio`.
@@ -97,8 +97,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Split from At.pm.
 
-[Unreleased]: https://github.com/sanko/Bluesky.pm/compare/1.6.0...HEAD
-[1.6.0]: https://github.com/sanko/Bluesky.pm/compare/1.01...1.6.0
+[Unreleased]: https://github.com/sanko/Bluesky.pm/compare/v1.8.0...HEAD
+[v1.8.0]: https://github.com/sanko/Bluesky.pm/compare/1.01...v1.8.0
 [1.01]: https://github.com/sanko/Bluesky.pm/compare/1.00...1.01
 [1.00]: https://github.com/sanko/Bluesky.pm/compare/0.20...1.00
 [0.20]: https://github.com/sanko/Bluesky.pm/compare/0.19...0.20
