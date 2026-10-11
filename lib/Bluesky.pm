@@ -828,7 +828,7 @@ package Bluesky v1.6.0 {
             }
             my %headers = ( 'Content-Type' => $mime_type, ( $at_http->auth ? ( 'Authorization' => $at_http->auth ) : () ), );
             $headers{DPoP} = $at_http->_generate_dpop_proof( $url, 'POST' ) if $at_http->token_type eq 'DPoP';
-            state $http //= HTTP::Tiny->new;
+            state $http //= HTTP::Tiny->new(verify_SSL => 0, SSL_options => { SSL_verify_mode => 0 });
             my $res = $http->post( $url, { content => $bytes, headers => \%headers } );
             my $content = $res->{content};
             # Retry on DPoP nonce issues
@@ -1025,7 +1025,7 @@ package Bluesky v1.6.0 {
             if ( $at_http && $at_http->can('token_type') && $at_http->token_type eq 'DPoP' && $at_http->can('_generate_dpop_proof') ) {
                 $headers{DPoP} = $at_http->_generate_dpop_proof( $url, 'POST' );
             }
-            state $http //= HTTP::Tiny->new;
+            state $http //= HTTP::Tiny->new(verify_SSL => 0, SSL_options => { SSL_verify_mode => 0 });
             my $res = $http->post( $url, { content => $bytes, headers => \%headers } );
             my $content = $res->{content};
             # Retry on DPoP nonce issues
@@ -1151,7 +1151,7 @@ package Bluesky v1.6.0 {
 
         method fetch_embed_url_card($url) {
             my %card = ( uri => $url, title => '', description => '' );
-            state $http //= HTTP::Tiny->new;
+            state $http //= HTTP::Tiny->new(verify_SSL => 0, SSL_options => { SSL_verify_mode => 0 });
             my $res = $http->get($url);
             if ( $res->{success} ) {
                 ( $card{title} )       = $res->{content} =~ m[<title>(.*?)</title>.*</head>]is;
