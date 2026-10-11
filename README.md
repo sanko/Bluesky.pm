@@ -63,6 +63,107 @@ Expected parameters include:
 
     Underlying [At](https://metacpan.org/pod/At) object. If not provided, it defaults to `At->new( host => $service )`.
 
+## `ensure_auth( %args )`
+
+```perl
+$bsky->ensure_auth( handle => 'you.bsky.social' );
+```
+
+Convenience wrapper for applications that want to stay logged in across runs. When `file` exists it loads and resumes
+the saved session (re-saving it if the underlying tokens were rotated); otherwise it runs an interactive OAuth flow via
+`oauth_helper` and saves the resulting session.
+
+Expected parameters include:
+
+- `file`
+
+    Path to the session file. Defaults to `session.json`.
+
+- `handle`
+
+    The user's handle or DID. Required when no saved session exists.
+
+- `scope`
+
+    Requested OAuth scopes. Defaults to `atproto`.
+
+- `listen`
+
+    Passed through to `oauth_helper`. Defaults to `1`.
+
+- `client_id`, `redirect`
+
+    Optional OAuth overrides, passed through to `oauth_helper`.
+
+- `on_success`
+
+    Optional callback invoked after a successful first-time login. Receives the `$bsky` object.
+
+## `oauth_helper( %args )`
+
+A high-level helper to manage the entire OAuth flow. This is the recommended way to authenticate for interactive
+applications.
+
+```perl
+$bsky->oauth_helper(
+    handle     => 'user.bsky.social',
+    listen     => 1,
+    on_success => sub ($self) {
+        say 'Authenticated as ' . $self->did;
+    }
+);
+```
+
+Expected parameters include:
+
+- `handle` - required
+
+    The user's handle or DID.
+
+- `listen`
+
+    Boolean. If true, attempts to start a local HTTP server (using [Mojolicious](https://metacpan.org/pod/Mojolicious)) to automatically capture the `code` and
+    `state` from the redirect.
+
+- `redirect`
+
+    The redirect URI. Defaults to `http://127.0.0.1:8888/callback`.
+
+- `scope`
+
+    The requested OAuth scopes. Defaults to `atproto`.
+
+    See [https://atproto.com/guides/scope-builder](https://atproto.com/guides/scope-builder) to build your own scope strings.
+
+- `on_success`
+
+    A callback subroutine invoked after a successful login. Receives the `$bsky` object as an argument.
+
+## `oauth_start( $handle, $client_id, $redirect_uri, [ $scope ] )`
+
+Initiates the OAuth 2.0 Authorization Code flow. Returns the authorization URL.
+
+`$scope` defaults to `atproto` if omitted.
+
+```perl
+my $url = $bsky->oauth_start(
+    'user.bsky.social',
+    'http://localhost',
+    'http://127.0.0.1:8888/callback'
+);
+```
+
+The `$scope` here defaults to simply '`atproto`'. See [https://atproto.com/guides/scope-builder](https://atproto.com/guides/scope-builder) to build your own
+scope strings.
+
+## `oauth_callback( $code, $state )`
+
+Exchanges the authorization code for tokens and completes the OAuth flow.
+
+```
+$bsky->oauth_callback( $code, $state );
+```
+
 ## `login( $identifier, $password )`
 
 ```
@@ -121,107 +222,6 @@ $bsky->load_session();
 
 Reads a previously saved session from `$file` (default `session.json`) and resumes it. Returns false when the file
 does not exist or cannot be parsed.
-
-## `ensure_auth( %args )`
-
-```perl
-$bsky->ensure_auth( handle => 'you.bsky.social' );
-```
-
-Convenience wrapper for applications that want to stay logged in across runs. When `file` exists it loads and resumes
-the saved session (re-saving it if the underlying tokens were rotated); otherwise it runs an interactive OAuth flow via
-`oauth_helper` and saves the resulting session.
-
-Expected parameters include:
-
-- `file`
-
-    Path to the session file. Defaults to `session.json`.
-
-- `handle`
-
-    The user's handle or DID. Required when no saved session exists.
-
-- `scope`
-
-    Requested OAuth scopes. Defaults to `atproto`.
-
-- `listen`
-
-    Passed through to `oauth_helper`. Defaults to `1`.
-
-- `client_id`, `redirect`
-
-    Optional OAuth overrides, passed through to `oauth_helper`.
-
-- `on_success`
-
-    Optional callback invoked after a successful first-time login. Receives the `$bsky` object.
-
-## `oauth_start( $handle, $client_id, $redirect_uri, [ $scope ] )`
-
-Initiates the OAuth 2.0 Authorization Code flow. Returns the authorization URL.
-
-`$scope` defaults to `atproto` if omitted.
-
-```perl
-my $url = $bsky->oauth_start(
-    'user.bsky.social',
-    'http://localhost',
-    'http://127.0.0.1:8888/callback'
-);
-```
-
-The `$scope` here defaults to simply '`atproto`'. See [https://atproto.com/guides/scope-builder](https://atproto.com/guides/scope-builder) to build your own
-scope strings.
-
-## `oauth_callback( $code, $state )`
-
-Exchanges the authorization code for tokens and completes the OAuth flow.
-
-```
-$bsky->oauth_callback( $code, $state );
-```
-
-## `oauth_helper( %args )`
-
-A high-level helper to manage the entire OAuth flow. This is the recommended way to authenticate for interactive
-applications.
-
-```perl
-$bsky->oauth_helper(
-    handle     => 'user.bsky.social',
-    listen     => 1,
-    on_success => sub ($self) {
-        say 'Authenticated as ' . $self->did;
-    }
-);
-```
-
-Expected parameters include:
-
-- `handle` - required
-
-    The user's handle or DID.
-
-- `listen`
-
-    Boolean. If true, attempts to start a local HTTP server (using [Mojolicious](https://metacpan.org/pod/Mojolicious)) to automatically capture the `code` and
-    `state` from the redirect.
-
-- `redirect`
-
-    The redirect URI. Defaults to `http://127.0.0.1:8888/callback`.
-
-- `scope`
-
-    The requested OAuth scopes. Defaults to `atproto`.
-
-    See [https://atproto.com/guides/scope-builder](https://atproto.com/guides/scope-builder) to build your own scope strings.
-
-- `on_success`
-
-    A callback subroutine invoked after a successful login. Receives the `$bsky` object as an argument.
 
 ## `firehose( $callback, [ $url ] )`
 
