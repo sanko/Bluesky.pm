@@ -12,16 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `videoEmbed( $blob, %opts )` wraps an already-uploaded video blob (such as the processed blob from `getVideoJobStatus`) as an `app.bsky.embed.video` with `alt`, `aspectRatio`, `presentation`, and `captions`.
 - `uploadImages` and `uploadGallery` now pass through a per-image `aspectRatio`; `uploadVideo` now accepts `presentation`.
 - `createPost` accepts a fully-built embed (any hashref carrying a `$type`), so embeds produced by `videoEmbed` can be posted directly.
-
-### Changed
-- Video upload now targets the video service host (`https://video.bsky.app`) and authenticates with a short-lived service token minted via `com.atproto.server.getServiceAuth`, sent as a plain `Bearer` token. `uploadVideoJob` previously posted to the PDS with the session's DPoP token, which returns `501 Method Not Implemented`. The `did`/`name` query parameters and return value (`jobStatus`, including `409 AlreadyExists`) are unchanged.
-
-### Fixed
-- `getVideoUploadLimits` and `getVideoJobStatus` now use the video-service host and service token as well, so they work with OAuth (DPoP) sessions.
-
-## [1.6.0] - 2026-10-10
-
-### Added
 - New feed methods: `getListFeed` (`app.bsky.feed.getListFeed`), `sendInteractions` (`app.bsky.feed.sendInteractions`).
 - New social graph methods: `getListBlocks`, `getListMutes`, `getListsWithMembership`, `getStarterPacksWithMembership`, `getSuggestedFollowsByActor`, `searchStarterPacks`.
 - New notification methods: `getNotificationPreferences`, `putNotificationPreferences`, `putNotificationPreferencesV2`, `listActivitySubscriptions`, `putActivitySubscription`, `registerPush`, `unregisterPush`.
@@ -34,13 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `follower` rule for `createPost` thread gates (`reply_gate`), per the official thread gates guide.
 - `uploadVideoJob` accepts `did`, `name`, and `host` options for the video-service upload flow.
 - Session persistence helpers: `save_session`, `load_session`, and `ensure_auth` (resumes a saved session when present, otherwise runs OAuth and persists the result).
-- Mock-based unit tests covering every network-mockable method (`t/004_full.t`), plus session-persistence tests (`t/005_session.t`).
-- Local `eg/` demos: `feed.pl`, `graph.pl`, `chat.pl`, `media.pl`, and `drafts.pl`; each authenticates through `ensure_auth`.
-
-### Changed
-- Test suite migrated from `Test::More` to `Test2::V0`.
+- Demos in `eg/`:
+  - `chat.pl`: list conversations, print one conversation's messages, optionally send a reply, and mark it read.
+  - `drafts.pl`: a full draft round-trip: create, list, update, and delete.
+  - `feed.pl`: read the home timeline and a post thread, then like/unlike a post.
+  - `graph.pl`: a follow/unfollow round-trip, follows and followers, relationships, a handle's lists (plus the first list's feed), and starter packs.
+  - `media.pl`: post an image embed, a gallery embed, and a video uploaded through the video service (with alt, `aspectRatio`, captions, and presentation).
+  - `videoupload.pl`: a focused video-service upload that polls `getVideoJobStatus` until the processed blob is ready.
 
 ### Fixed
+- `getVideoUploadLimits` and `getVideoJobStatus` now use the video-service host and service token as well, so they work with OAuth (DPoP) sessions.
 - `uploadVideo` now throws the server error on upload failure instead of returning early.
 - `uploadFile`, `uploadImages`, `uploadVideo`, and `uploadVideoJob` now treat file paths as files on Windows (the filename guard was rejecting real paths containing `:` or `\`) and propagate the actual upload error instead of a generic "upload failed".
 - Documentation. Like, in general.

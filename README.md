@@ -1542,11 +1542,12 @@ too.
 
 Unlike ["uploadVideo( $video )"](#uploadvideo-video), which uploads a finished blob for embedding, this starts a server-side processing
 job. The recommended flow from [https://bsky.network/docs/about-bluesky-content/video](https://bsky.network/docs/about-bluesky-content/video) is: create a service token for
-`com.atproto.repo.uploadBlob`, upload to the video service, poll the job for its `blob`, then post. The `uploadVideo`
-reply is the job status: if it already carries a `blob` use it directly, otherwise poll ["getVideoJobStatus( $jobId )"](#getvideojobstatus-jobid)
-until `blob` is present. If the video was already processed the service reports an `already_exists` error (HTTP `409`),
-and the returned job may need to be polled to obtain its `blob`. Note that Bluesky-hosted accounts must verify their
-email before uploading video, and daily video limits apply (see ["getVideoUploadLimits( )"](#getvideouploadlimits)).
+`com.atproto.repo.uploadBlob`, upload to the video service, poll the job for its `blob`, then post. The
+`uploadVideo` reply is the job status: if it already carries a `blob` use it directly, otherwise poll
+["getVideoJobStatus( $jobId )"](#getvideojobstatus-jobid) until `blob` is present. If the video was already processed the service reports an
+`already_exists` error (HTTP `409`), and the returned job may need to be polled to obtain its `blob`. Note that
+Bluesky-hosted accounts must verify their email before uploading video, and daily video limits apply (see
+["getVideoUploadLimits( )"](#getvideouploadlimits)).
 
 # Drafts
 
@@ -1724,9 +1725,8 @@ structure.
 
 ## `uploadGallery( @items )`
 
-Uploads gallery items (same accepted forms as ["uploadImages( @images )"](#uploadimages-images)) and returns an
-`app.bsky.embed.gallery` structure. Each item becomes an `app.bsky.embed.gallery#image` and may carry an
-`aspectRatio`.
+Uploads gallery items (same accepted forms as ["uploadImages( @images )"](#uploadimages-images)) and returns an `app.bsky.embed.gallery`
+structure. Each item becomes an `app.bsky.embed.gallery#image` and may carry an `aspectRatio`.
 
 ## `uploadVideoCaption( $lang, $caption )`
 
@@ -1743,9 +1743,9 @@ use ["uploadVideoJob( $bytes\_or\_path, \[ $mime\_type, %opts \] )"](#uploadvide
 ## `videoEmbed( $blob, %opts )`
 
 Builds an `app.bsky.embed.video` structure from an already-uploaded blob, typically the processed blob returned by
-["getVideoJobStatus( $jobId )"](#getvideojobstatus-jobid) after ["uploadVideoJob( $bytes\_or\_path, \[ $mime\_type, %opts \] )"](#uploadvideojob-bytes_or_path-mime_type-opts). Recognized `%opts`
-are `alt`, `aspectRatio`, `presentation` (`default` or `gif`), and `captions` (either `{ lang => file }`
-or `[ { lang => ..., file => ... } ]`). Caption files are uploaded for you.
+["getVideoJobStatus( $jobId )"](#getvideojobstatus-jobid) after ["uploadVideoJob( $bytes\_or\_path, \[ $mime\_type, %opts \] )"](#uploadvideojob-bytes_or_path-mime_type-opts). Recognized
+`%opts` are `alt`, `aspectRatio`, `presentation` (`default` or `gif`), and `captions` (either `{ lang =>
+file }` or `[ { lang => ..., file => ... } ]`). Caption files are uploaded for you.
 
 ```perl
 my $job    = $bsky->uploadVideoJob( 'clip.mp4', 'video/mp4', did => $bsky->did, name => 'clip.mp4' );

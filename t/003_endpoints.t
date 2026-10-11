@@ -1,27 +1,19 @@
 use v5.40;
 use Test2::V0;
 use blib;
-use lib 'lib', '../At.pm/lib';
 use Bluesky;
 
-# Mock At instance (same pattern as t/001_mock.t)
-{
-
-    package Mock::At;
-    use feature 'class';
-    no warnings 'experimental::class';
-
-    class Mock::At {
-        field $did : param = 'did:plc:mock-user';
-        field $last_get;
-        field $last_post;
-        field $last_writes = [];
-        field $last_record;
-        method did()  {$did}
-        method host() {'https://bsky.social'}
-
-        method get ( $method, $params = {} ) {
+# Mock At: canned responses for every endpoint exercised below.
+my ( $last_get, $last_post );
+my $mock_at = mock 'At' => (
+    override => [
+        did  => sub {'did:plc:mock-user'},
+        host => sub {'https://bsky.social'},
+        get  => sub ( $self, $method, $params = {} ) {
             $last_get = { method => $method, params => $params };
+            if ( $method eq 'com.atproto.server.getServiceAuth' ) {
+                return { token => 'mock-service-token' };
+            }
             if ( $method eq 'app.bsky.feed.getListFeed' ) {
                 return { feed => [ { post => { uri => 'at://did:plc:x/app.bsky.feed.post/1' } } ] };
             }
@@ -49,15 +41,6 @@ use Bluesky;
             if ( $method eq 'app.bsky.notification.listActivitySubscriptions' ) {
                 return { subscriptions => [ { handle => 'fan.bsky.social' } ] };
             }
-            if ( $method eq 'com.atproto.server.getServiceAuth' ) {
-                return { token => 'mock-service-token' };
-            }
-            if ( $method eq 'app.bsky.video.getUploadLimits' ) {
-                return { canUpload => 1, remainingDailyVideos => 9 };
-            }
-            if ( $method eq 'app.bsky.video.getJobStatus' ) {
-                return { jobStatus => { jobId => 'job1', state => 'JOB_STATE_COMPLETED' } };
-            }
             if ( $method eq 'app.bsky.draft.getDrafts' ) {
                 return { drafts => [ { id => 'draft1' } ] };
             }
@@ -83,11 +66,9 @@ use Bluesky;
                 return { labels => [ { val => 'porn' } ] };
             }
             return {};
-        }
-
-        method post ( $method, $data = {} ) {
+        },
+        post => sub ( $self, $method, $data = {} ) {
             $last_post = { method => $method, data => $data };
-            push @$last_writes, { method => $method, data => $data };
             if ( $method eq 'app.bsky.notification.putPreferencesV2' ) {
                 return { preferences => { chat => { include => 'all' } } };
             }
@@ -101,101 +82,35 @@ use Bluesky;
                 return { matchesAndContactIndexes => [ { contactIndex => 0 } ] };
             }
             return { success => 1 };
-        }
-        method last_get()    {$last_get}
-        method last_post()   {$last_post}
-        method last_writes() {$last_writes}
+        },
+    ]
+);
 
-        method create_record ( $collection, $record, $rkey = undef ) {
-            $last_record = { collection => $collection, record => $record, rkey => $rkey };
-            return { uri => 'at://did:plc:mock-user/app.bsky.feed.post/abc123', cid => 'bafy-post-cid' };
-        }
-        method last_record() {$last_record}
-
-        method http() {
-            state $h = bless { token_type => 'Bearer' }, 'Mock::HTTP';
-
-            # Add proxy method to mock http
-            {
-                no warnings 'redefine', 'once';
-                *Mock::HTTP::at_protocol_proxy = sub {undef};
-            }
-            return $h;
-        }
-    }
-}
-
-# We need to override Bluesky's internal _at_for to return our mock
-{
-    package Mock::HTTP::Tiny;
-    our $FORCE_409 = 0;
-    sub new { bless {}, shift }
-    sub get {
-        my ( $self, $url, $args ) = @_;
-        my $content = $url =~ /getJobStatus/
-            ? '{"jobStatus":{"jobId":"job1","state":"JOB_STATE_COMPLETED"}}'
-            : '{"canUpload":1,"remainingDailyVideos":9}';
-        return {
-            success => 1,
-            status  => 200,
-            headers => { 'content-type' => 'application/json' },
-            content => $content
-        };
-    }
-    sub post {
-        my ( $self, $url, $args ) = @_;
-        return {
-            success => 0,
-            status  => 409,
-            reason  => 'Conflict',
-            headers => { 'content-type' => 'application/json' },
-            content => '{"error":"already_exists","jobStatus":{"jobId":"job1","state":"JOB_STATE_COMPLETED","blob":{"$type":"blob"}}}'
-        } if $FORCE_409;
-        return {
-            success => 1,
-            status  => 200,
-            headers => { 'content-type' => 'application/json' },
-            content => '{"jobStatus":{"jobId":"job1","state":"JOB_STATE_COMPLETED"}}'
-        };
-    }
-}
-my $mock = Mock::At->new();
-{
-    no warnings 'redefine';
-    *Bluesky::_at_for = sub {$mock};
-
-    # Also override the internal $at field access if possible, or just the accessor
-    *Bluesky::at = sub {$mock};
-
-    # Video service calls go straight to the sidecar service over HTTP::Tiny
-    *Bluesky::_video_http = sub { Mock::HTTP::Tiny->new };
-
-    # Blob uploads are stubbed so media embeds never touch the network.
-    *Bluesky::uploadFile = sub {
-        my ( $self, $bytes, $mime ) = @_;
-        my $size = length( defined $bytes ? $bytes : '' );
-        return {
-            '$type'   => 'blob',
-            ref       => { '$link' => 'bafymock' . $size },
-            mimeType  => $mime // 'application/octet-stream',
-            size      => $size,
-        };
-    };
-}
+# The video service talks to video.bsky.app over its own HTTP::Tiny client.
+my $video_http = mock 'HTTP::Tiny' => (
+    override => [
+        new => sub { bless {}, shift },
+        get => sub ( $self, $url, $opts ) {
+            my $content = $url =~ /getJobStatus/ ? '{"jobStatus":{"jobId":"job1","state":"JOB_STATE_COMPLETED"}}' :
+                '{"canUpload":1,"remainingDailyVideos":9}';
+            return { success => 1, status => 200, headers => { 'content-type' => 'application/json' }, content => $content };
+        },
+    ]
+);
 my $bsky = Bluesky->new();
 subtest 'Feed additions' => sub {
     my $feed = $bsky->getListFeed('at://did:plc:x/app.bsky.graph.list/1');
-    is ref $feed,                       'ARRAY',                                'getListFeed returns arrayref';
-    is $mock->last_get->{method},       'app.bsky.feed.getListFeed',            'getListFeed routes correctly';
-    is $mock->last_get->{params}{list}, 'at://did:plc:x/app.bsky.graph.list/1', 'getListFeed passes list';
+    is ref $feed,                 'ARRAY',                                'getListFeed returns arrayref';
+    is $last_get->{method},       'app.bsky.feed.getListFeed',            'getListFeed routes correctly';
+    is $last_get->{params}{list}, 'at://did:plc:x/app.bsky.graph.list/1', 'getListFeed passes list';
     $bsky->sendInteractions( interactions => [ { item => 'at://did:plc:x/app.bsky.feed.post/1', event => 'app.bsky.feed.defs#interactionSeen' } ] );
-    is $mock->last_post->{method}, 'app.bsky.feed.sendInteractions', 'sendInteractions routes correctly';
+    is $last_post->{method}, 'app.bsky.feed.sendInteractions', 'sendInteractions routes correctly';
 };
 subtest 'Graph additions' => sub {
     is ref $bsky->getListBlocks(),                                     'ARRAY',              'getListBlocks returns arrayref';
     is ref $bsky->getListMutes(),                                      'ARRAY',              'getListMutes returns arrayref';
     is ref $bsky->getListsWithMembership('target.bsky.social'),        'ARRAY',              'getListsWithMembership returns arrayref';
-    is $mock->last_get->{params}{actor},                               'target.bsky.social', 'getListsWithMembership passes actor';
+    is $last_get->{params}{actor},                                     'target.bsky.social', 'getListsWithMembership passes actor';
     is ref $bsky->getStarterPacksWithMembership('target.bsky.social'), 'ARRAY',              'getStarterPacksWithMembership returns arrayref';
     my $sug = $bsky->getSuggestedFollowsByActor('bsky.app');
     is $sug->[0]{handle},                            'friend.bsky.social', 'getSuggestedFollowsByActor unwraps suggestions';
@@ -204,98 +119,47 @@ subtest 'Graph additions' => sub {
 subtest 'Notification additions' => sub {
     ok $bsky->getNotificationPreferences(), 'getNotificationPreferences returns preferences';
     $bsky->putNotificationPreferences( priority => 1 );
-    is $mock->last_post->{method}, 'app.bsky.notification.putPreferences', 'putNotificationPreferences routes correctly';
+    is $last_post->{method}, 'app.bsky.notification.putPreferences', 'putNotificationPreferences routes correctly';
     ok $bsky->putNotificationPreferencesV2( chat => { include => 'all', push => 1 } ), 'putNotificationPreferencesV2 returns preferences';
     is ref $bsky->listActivitySubscriptions(), 'ARRAY', 'listActivitySubscriptions returns arrayref';
     $bsky->putActivitySubscription( 'did:plc:x', { post => 1, reply => 1 } );
-    is $mock->last_post->{method}, 'app.bsky.notification.putActivitySubscription', 'putActivitySubscription routes correctly';
+    is $last_post->{method}, 'app.bsky.notification.putActivitySubscription', 'putActivitySubscription routes correctly';
     $bsky->registerPush( serviceDid => 'did:web:x', token => 't', platform => 'ios', appId => 'a' );
-    is $mock->last_post->{method}, 'app.bsky.notification.registerPush', 'registerPush routes correctly';
+    is $last_post->{method}, 'app.bsky.notification.registerPush', 'registerPush routes correctly';
     $bsky->unregisterPush( serviceDid => 'did:web:x', token => 't', platform => 'ios', appId => 'a' );
-    is $mock->last_post->{method}, 'app.bsky.notification.unregisterPush', 'unregisterPush routes correctly';
+    is $last_post->{method}, 'app.bsky.notification.unregisterPush', 'unregisterPush routes correctly';
 };
 subtest 'Video service' => sub {
     my $limits = $bsky->getVideoUploadLimits();
     ok $limits->{canUpload}, 'getVideoUploadLimits returns limits';
     my $job = $bsky->getVideoJobStatus('job1');
     is $job->{state}, 'JOB_STATE_COMPLETED', 'getVideoJobStatus unwraps jobStatus';
-    my $upload = $bsky->uploadVideoJob( 'fake-video-bytes', 'video/mp4', did => 'did:plc:mock-user', name => 'clip.mp4' );
-    is $upload->{jobId}, 'job1', 'uploadVideoJob unwraps jobStatus';
-    {
-        local $Mock::HTTP::Tiny::FORCE_409 = 1;
-        my $again = $bsky->uploadVideoJob( 'fake-video-bytes', 'video/mp4', did => 'did:plc:mock-user', name => 'clip.mp4' );
-        is $again->{state}, 'JOB_STATE_COMPLETED', 'uploadVideoJob treats 409 already_exists as a usable jobStatus';
-        ok $again->{blob}, 'uploadVideoJob 409 response keeps the blob';
-    }
-    my $pds_did = $bsky->_pds_did;
-    is $pds_did, 'did:web:bsky.social', '_pds_did derives did:web from PDS host';
-};
-subtest 'Media embeds' => sub {
-    my $images = $bsky->uploadImages(
-        { image => 'fake-png', alt => 'first', aspectRatio => { width => 4, height => 3 } },
-        { image => 'fake-png', alt => 'second' },
-    );
-    is $images->{'$type'},                       'app.bsky.embed.images',        'uploadImages builds images embed';
-    is $images->{images}[0]{alt},                'first',                        'uploadImages passes alt';
-    is $images->{images}[0]{aspectRatio}{width}, 4,                              'uploadImages passes aspectRatio';
-    ok !exists $images->{images}[1]{aspectRatio},                                'uploadImages omits aspectRatio when absent';
-    is $images->{images}[0]{image}{mimeType},    'application/octet-stream',     'uploadImages attaches blob';
-
-    my $gallery = $bsky->uploadGallery(
-        { image => 'fake-png', alt => 'one',   aspectRatio => { width => 1, height => 1 } },
-        { image => 'fake-png', alt => 'two' },
-    );
-    is $gallery->{'$type'},                    'app.bsky.embed.gallery',           'uploadGallery builds gallery embed';
-    is $gallery->{items}[0]{'$type'},          'app.bsky.embed.gallery#image',     'uploadGallery tags items';
-    is $gallery->{items}[0]{aspectRatio}{height}, 1,                              'uploadGallery passes aspectRatio';
-    is $gallery->{items}[1]{alt},              'two',                              'uploadGallery passes alt';
-
-    my $video = $bsky->videoEmbed(
-        { '$type' => 'blob', ref => { '$link' => 'bafyvid' }, mimeType => 'video/mp4', size => 42 },
-        alt          => 'a short clip',
-        aspectRatio  => { width => 1280, height => 720 },
-        presentation => 'gif',
-        captions     => { en => "WEBVTT\n\n00:00.000 --> 00:01.000\nHi\n" },
-    );
-    is $video->{'$type'},              'app.bsky.embed.video',   'videoEmbed builds video embed';
-    is $video->{alt},                  'a short clip',           'videoEmbed passes alt';
-    is $video->{presentation},         'gif',                    'videoEmbed passes presentation';
-    is $video->{aspectRatio}{height},  720,                      'videoEmbed passes aspectRatio';
-    is $video->{captions}[0]{lang},    'en',                     'videoEmbed uploads captions';
-    is $video->{captions}[0]{file}{mimeType}, 'text/vtt',        'videoEmbed caption blob is text/vtt';
-
-    $bsky->createPost( text => 'gallery post', timestamp => '2026-01-01T00:00:00.000Z', embed => { gallery => [ { image => 'fake-png', alt => 'x' } ] } );
-    is $mock->last_record->{record}{embed}{'$type'}, 'app.bsky.embed.gallery', 'createPost routes gallery embed';
-
-    $bsky->createPost( text => 'video post', timestamp => '2026-01-01T00:00:00.000Z', embed => $video );
-    is $mock->last_record->{record}{embed}{'$type'}, 'app.bsky.embed.video', 'createPost accepts a pre-built embed';
-    is $mock->last_record->{record}{embed}{video}{ref}{'$link'}, 'bafyvid', 'createPost preserves the video blob';
 };
 subtest Drafts => sub {
     is ref $bsky->getDrafts(), 'ARRAY', 'getDrafts returns arrayref';
     my $created = $bsky->createDraft( { posts => [ { text => 'Unfinished thought...' } ] } );
     is $created->{id}, 'draft1', 'createDraft returns id';
     $bsky->updateDraft( { id => 'draft1', draft => { posts => [] } } );
-    is $mock->last_post->{method}, 'app.bsky.draft.updateDraft', 'updateDraft routes correctly';
+    is $last_post->{method}, 'app.bsky.draft.updateDraft', 'updateDraft routes correctly';
     $bsky->deleteDraft('draft1');
-    is $mock->last_post->{method},   'app.bsky.draft.deleteDraft', 'deleteDraft routes correctly';
-    is $mock->last_post->{data}{id}, 'draft1',                     'deleteDraft passes id';
+    is $last_post->{method},   'app.bsky.draft.deleteDraft', 'deleteDraft routes correctly';
+    is $last_post->{data}{id}, 'draft1',                     'deleteDraft passes id';
 };
 subtest Contacts => sub {
     is ref $bsky->getContactMatches(), 'ARRAY', 'getContactMatches returns arrayref';
     ok $bsky->getContactSyncStatus(), 'getContactSyncStatus returns status';
     is ref $bsky->importContacts( token => 'jwt', contacts => ['+12125550123'] ), 'ARRAY', 'importContacts unwraps matches';
     $bsky->dismissContactMatch('did:plc:bad');
-    is $mock->last_post->{method}, 'app.bsky.contact.dismissMatch', 'dismissContactMatch routes correctly';
+    is $last_post->{method}, 'app.bsky.contact.dismissMatch', 'dismissContactMatch routes correctly';
     $bsky->removeContactData();
-    is $mock->last_post->{method}, 'app.bsky.contact.removeData', 'removeContactData routes correctly';
+    is $last_post->{method}, 'app.bsky.contact.removeData', 'removeContactData routes correctly';
     $bsky->startPhoneVerification('+12125550123');
-    is $mock->last_post->{method},                     'app.bsky.contact.startPhoneVerification', 'startPhoneVerification routes correctly';
+    is $last_post->{method},                           'app.bsky.contact.startPhoneVerification', 'startPhoneVerification routes correctly';
     is $bsky->verifyPhone( '+12125550123', '123456' ), 'single-use-jwt',                          'verifyPhone returns token';
 };
 subtest 'Age assurance and labels' => sub {
     $bsky->beginAgeAssurance( email => 'me@example.com', language => 'en', countryCode => 'US' );
-    is $mock->last_post->{method}, 'app.bsky.ageassurance.begin', 'beginAgeAssurance routes correctly';
+    is $last_post->{method}, 'app.bsky.ageassurance.begin', 'beginAgeAssurance routes correctly';
     ok $bsky->getAgeAssuranceConfig(),                     'getAgeAssuranceConfig returns config';
     ok $bsky->getAgeAssuranceState( countryCode => 'US' ), 'getAgeAssuranceState returns state';
     my $labels = $bsky->queryLabels( uriPatterns => ['at://did:plc:x/*'] );

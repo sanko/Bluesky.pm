@@ -1401,11 +1401,12 @@ too.
 
 Unlike L</"uploadVideo( $video )">, which uploads a finished blob for embedding, this starts a server-side processing
 job. The recommended flow from L<https://bsky.network/docs/about-bluesky-content/video> is: create a service token for
-C<com.atproto.repo.uploadBlob>, upload to the video service, poll the job for its C<blob>, then post. The C<uploadVideo>
-reply is the job status: if it already carries a C<blob> use it directly, otherwise poll L</"getVideoJobStatus( $jobId )">
-until C<blob> is present. If the video was already processed the service reports an C<already_exists> error (HTTP C<409>),
-and the returned job may need to be polled to obtain its C<blob>. Note that Bluesky-hosted accounts must verify their
-email before uploading video, and daily video limits apply (see L</"getVideoUploadLimits( )">).
+C<com.atproto.repo.uploadBlob>, upload to the video service, poll the job for its C<blob>, then post. The
+C<uploadVideo> reply is the job status: if it already carries a C<blob> use it directly, otherwise poll
+L</"getVideoJobStatus( $jobId )"> until C<blob> is present. If the video was already processed the service reports an
+C<already_exists> error (HTTP C<409>), and the returned job may need to be polled to obtain its C<blob>. Note that
+Bluesky-hosted accounts must verify their email before uploading video, and daily video limits apply (see
+L</"getVideoUploadLimits( )">).
 
 =head1 Drafts
 
@@ -1553,9 +1554,8 @@ structure.
 
 =head2 C<uploadGallery( @items )>
 
-Uploads gallery items (same accepted forms as L</"uploadImages( @images )">) and returns an
-C<app.bsky.embed.gallery> structure. Each item becomes an C<app.bsky.embed.gallery#image> and may carry an
-C<aspectRatio>.
+Uploads gallery items (same accepted forms as L</"uploadImages( @images )">) and returns an C<app.bsky.embed.gallery>
+structure. Each item becomes an C<app.bsky.embed.gallery#image> and may carry an C<aspectRatio>.
 
 =head2 C<uploadVideoCaption( $lang, $caption )>
 
@@ -1572,9 +1572,9 @@ use L</"uploadVideoJob( $bytes_or_path, [ $mime_type, %opts ] )"> and then L</"v
 =head2 C<videoEmbed( $blob, %opts )>
 
 Builds an C<app.bsky.embed.video> structure from an already-uploaded blob, typically the processed blob returned by
-L</"getVideoJobStatus( $jobId )"> after L</"uploadVideoJob( $bytes_or_path, [ $mime_type, %opts ] )">. Recognized C<%opts>
-are C<alt>, C<aspectRatio>, C<presentation> (C<default> or C<gif>), and C<captions> (either C<< { lang =E<gt> file } >>
-or C<< [ { lang =E<gt> ..., file =E<gt> ... } ] >>). Caption files are uploaded for you.
+L</"getVideoJobStatus( $jobId )"> after L</"uploadVideoJob( $bytes_or_path, [ $mime_type, %opts ] )">. Recognized
+C<%opts> are C<alt>, C<aspectRatio>, C<presentation> (C<default> or C<gif>), and C<captions> (either C<< { lang =E<gt>
+file } >> or C<< [ { lang =E<gt> ..., file =E<gt> ... } ] >>). Caption files are uploaded for you.
 
     my $job    = $bsky->uploadVideoJob( 'clip.mp4', 'video/mp4', did => $bsky->did, name => 'clip.mp4' );
     my $status = $bsky->getVideoJobStatus( $job->{jobId} );

@@ -1,41 +1,15 @@
 use v5.40;
 use Test2::V0;
 use blib;
-use lib 'lib', '../At.pm/lib';
 use File::Temp qw[tempdir];
 use Bluesky;
 
 # Unit tests for the session persistence and authentication convenience methods:
 #   save_session, load_session, ensure_auth
-# A stateful mock stands in for At so no network or STDIN is touched.
-{
-
-    package Mock::AtS;
-    my %state;
-    sub new         { bless {}, shift }
-    sub did         {'did:plc:session-mock'}
-    sub host        {'https://bsky.social'}
-    sub reset_state { %state = () }
-    sub calls       { \%state }
-    sub set_active  { $state{active} = $_[1] }
-
-    sub resume {
-        my ( $self, @args ) = @_;
-        $state{active} = {
-            accessJwt    => $args[0],
-            refreshJwt   => $args[1],
-            token_type   => $args[2] // 'Bearer',
-            dpop_key_jwk => $args[3],
-            client_id    => $args[4],
-            handle       => $args[5],
-            pds          => $args[6],
-            scope        => $args[7],
-        };
-        $state{resumed}++;
-        return 1;
-    }
-    sub session { $state{active} }
-}
+# A stateful At mock stands in for the network so no live service or STDIN is touched.
+my %state;
+sub reset_state { %state = () }
+sub set_active { $state{active} = $_[0] }
 {
 
     package Mock::SessionObj;
@@ -44,12 +18,27 @@ use Bluesky;
     sub new { my ( $class, $args ) = @_; bless { $args ? %$args : () }, $class }
     sub _raw { my $self = shift; +{%$self} }
 }
-my $mock = Mock::AtS->new();
-{
-    no warnings 'redefine';
-    *Bluesky::at      = sub {$mock};
-    *Bluesky::_at_for = sub {$mock};
-}
+my $mock_at = mock 'At' => (
+    override => [
+        did    => sub {'did:plc:session-mock'},
+        host   => sub {'https://bsky.social'},
+        resume => sub ( $self, @args ) {
+            $state{active} = {
+                accessJwt    => $args[0],
+                refreshJwt   => $args[1],
+                token_type   => $args[2] // 'Bearer',
+                dpop_key_jwk => $args[3],
+                client_id    => $args[4],
+                handle       => $args[5],
+                pds          => $args[6],
+                scope        => $args[7],
+            };
+            $state{resumed}++;
+            return 1;
+        },
+        session => sub { $state{active} },
+    ]
+);
 my $bsky = Bluesky->new();
 
 sub read_json {
@@ -58,10 +47,10 @@ sub read_json {
     return JSON::PP::decode_json(<$fh>);
 }
 subtest 'save_session writes the active session to a JSON file' => sub {
-    Mock::AtS::reset_state();
+    reset_state();
     my $dir  = tempdir( CLEANUP => 1 );
     my $file = "$dir/session.json";
-    $mock->set_active(
+    set_active(
         {   accessJwt    => 'acc1',
             refreshJwt   => 'ref1',
             token_type   => 'DPoP',
@@ -82,17 +71,17 @@ subtest 'save_session writes the active session to a JSON file' => sub {
     is( $data->{scope},        'atproto',        'scope persisted' );
 };
 subtest 'save_session serializes a blessed session via _raw' => sub {
-    Mock::AtS::reset_state();
+    reset_state();
     my $dir  = tempdir( CLEANUP => 1 );
     my $file = "$dir/session.json";
-    $mock->set_active( Mock::SessionObj->new( { accessJwt => 'A', refreshJwt => 'R', handle => 'obj.bsky.social' } ) );
+    set_active( Mock::SessionObj->new( { accessJwt => 'A', refreshJwt => 'R', handle => 'obj.bsky.social' } ) );
     $bsky->save_session($file);
     my $data = read_json($file);
     is( $data->{accessJwt}, 'A',               '_raw branch: accessJwt persisted' );
     is( $data->{handle},    'obj.bsky.social', '_raw branch: handle persisted' );
 };
 subtest 'save_session without an active session carps and writes nothing' => sub {
-    Mock::AtS::reset_state();
+    reset_state();
     my $dir  = tempdir( CLEANUP => 1 );
     my $file = "$dir/session.json";
     my @warn;
@@ -104,7 +93,7 @@ subtest 'save_session without an active session carps and writes nothing' => sub
     like( join( '', @warn ), qr/No active session/, 'warns' );
 };
 subtest 'load_session resumes from a stored config' => sub {
-    Mock::AtS::reset_state();
+    reset_state();
     my $dir  = tempdir( CLEANUP => 1 );
     my $file = "$dir/session.json";
     open my $fh, '>', $file or die $!;
@@ -112,8 +101,8 @@ subtest 'load_session resumes from a stored config' => sub {
                  "handle":"me.bsky.social","pds":"pds.example.com","scope":"atproto"}';
     close $fh;
     ok( $bsky->load_session($file), 'load_session returns truthy resume result' );
-    is( $mock->calls->{resumed}, 1, 'resume was called' );
-    my $active = $mock->session;
+    is( $state{resumed}, 1, 'resume was called' );
+    my $active = $state{active};
     is( $active->{accessJwt},    'sto1',            'accessJwt passed positionally' );
     is( $active->{refreshJwt},   'str1',            'refreshJwt passed positionally' );
     is( $active->{token_type},   'DPoP',            'token_type passed positionally' );
@@ -124,28 +113,27 @@ subtest 'load_session resumes from a stored config' => sub {
     is( $active->{scope},        'atproto',         'scope passed positionally' );
 };
 subtest 'load_session safely handles missing or unparseable files' => sub {
-    Mock::AtS::reset_state();
+    reset_state();
     my $dir = tempdir( CLEANUP => 1 );
     is( $bsky->load_session("$dir/missing.json"), undef, 'missing file returns undef' );
-    is( $mock->calls->{resumed} // 0,             0,     'no resume attempted' );
+    is( $state{resumed} // 0,                     0,     'no resume attempted' );
     my $junk = "$dir/junk.json";
     open my $fh, '>', $junk or die $!;
     print {$fh} 'this is not json';
     close $fh;
-    is( $bsky->load_session($junk),   undef, 'garbage file returns undef without dying' );
-    is( $mock->calls->{resumed} // 0, 0,     'still no resume attempted' );
+    is( $bsky->load_session($junk), undef, 'garbage file returns undef without dying' );
+    is( $state{resumed} // 0,       0,     'still no resume attempted' );
 };
 subtest 'ensure_auth restores a stored session and re-saves (rotating tokens)' => sub {
-    Mock::AtS::reset_state();
+    reset_state();
     my $dir  = tempdir( CLEANUP => 1 );
     my $file = "$dir/session.json";
     open my $fh, '>', $file or die $!;
     print {$fh} '{"accessJwt":"OLD","refreshJwt":"OLDREF","token_type":"DPoP","dpop_key_jwk":"K",
                  "client_id":"C","handle":"me.bsky.social","pds":"p","scope":"atproto"}';
     close $fh;
-    local *Mock::AtS::resume = sub {
-        my ( $self, @args ) = @_;
-        $mock->set_active(
+    local *At::resume = sub( $self, @args ) {
+        set_active(
             {   accessJwt    => $args[0] . '-rotated',
                 refreshJwt   => $args[1] . '-rotated',
                 token_type   => 'DPoP',
@@ -168,14 +156,14 @@ subtest 'ensure_auth restores a stored session and re-saves (rotating tokens)' =
     is( $data->{refreshJwt}, 'OLDREF-rotated', 'rotated refreshJwt persisted (bug fix)' );
 };
 subtest 'ensure_auth falls back to oauth_helper on first run' => sub {
-    Mock::AtS::reset_state();
+    reset_state();
     my $dir  = tempdir( CLEANUP => 1 );
     my $file = "$dir/session.json";
     my @oauth_args;
     local *Bluesky::oauth_helper = sub {
         my ( $self, %a ) = @_;
         push @oauth_args, \%a;
-        $mock->set_active( { accessJwt => 'fresh', refreshJwt => 'freshref', handle => $a{handle}, token_type => 'DPoP' } );
+        set_active( { accessJwt => 'fresh', refreshJwt => 'freshref', handle => $a{handle}, token_type => 'DPoP' } );
         $a{on_success}->($self) if $a{on_success};
     };
     is( $bsky->ensure_auth( file => $file, handle => 'new.bsky.social', scope => 'atproto chat.bsky:send', listen => 0 ), $bsky, 'returns $self' );
@@ -187,8 +175,9 @@ subtest 'ensure_auth falls back to oauth_helper on first run' => sub {
     my $data = read_json($file);
     is( $data->{accessJwt}, 'fresh',           'freshly minted accessJwt persisted' );
     is( $data->{handle},    'new.bsky.social', 'handle persisted' );
-    Mock::AtS::reset_state();
+    reset_state();
     local *Bluesky::oauth_helper = sub { die 'should not reach interactive auth' };
     eval { $bsky->ensure_auth( file => "$dir/none.json" ); 1 } or like( $@, qr/handle/, 'dies with guidance when no session and no handle' );
 };
+#
 done_testing();
