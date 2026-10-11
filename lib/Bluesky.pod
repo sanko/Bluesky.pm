@@ -21,6 +21,9 @@ Bluesky - Bluesky Client Library in Perl
         on_success => sub { say 'Logged in!' }
     );
 
+    # Or use an app password (not recommended)
+    $bsky->login( 'sanko', '1111-2222-3333-4444' );
+
     # Posting
     $bsky->createPost( text => 'Hello from Perl!' );
 
@@ -60,7 +63,7 @@ Chat (DM) service host. Defaults to C<https://api.bsky.chat>.
 
 =item C<at> - optional
 
-Underlying L<At> object. If not provided, it defaults to C<At-E<gt>new( host => $service )>.
+Underlying L<At> object. If not provided, it defaults to C<At-E<gt>new( host =E<gt> $service )>.
 
 =back
 

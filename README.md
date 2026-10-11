@@ -18,6 +18,9 @@ $bsky->oauth_helper(
     on_success => sub { say 'Logged in!' }
 );
 
+# Or use an app password (not recommended)
+$bsky->login( 'sanko', '1111-2222-3333-4444' );
+
 # Posting
 $bsky->createPost( text => 'Hello from Perl!' );
 
@@ -58,7 +61,7 @@ Expected parameters include:
 
 - `at` - optional
 
-    Underlying [At](https://metacpan.org/pod/At) object. If not provided, it defaults to `At->new( host =` $service )>.
+    Underlying [At](https://metacpan.org/pod/At) object. If not provided, it defaults to `At->new( host => $service )`.
 
 ## `login( $identifier, $password )`
 
