@@ -683,6 +683,30 @@ Expected parameters include:
         );
         ```
 
+        Each image may also carry an `aspectRatio` (`{ width => 4, height => 3 }`).
+
+        ```perl
+        $bsky->createPost(
+            embed => { images => [ { image => 'path/to/my.jpg', alt => 'A frog.', aspectRatio => { width => 4, height => 3 } } ] },
+            text  => 'Look at this!'
+        );
+        ```
+
+    - `gallery`
+
+        A gallery embed (`app.bsky.embed.gallery`). The schema allows up to 20 items, though clients currently soft-limit
+        authoring UIs to 10. Each item is a hash with `image` and `alt`, plus an optional `aspectRatio`.
+
+        ```perl
+        $bsky->createPost(
+            embed => { gallery => [
+                { image => 'one.jpg', alt => 'First',  aspectRatio => { width => 4, height => 3 } },
+                { image => 'two.jpg', alt => 'Second', aspectRatio => { width => 1, height => 1 } },
+            ] },
+            text => 'A little gallery.'
+        );
+        ```
+
     - `url`
 
         A card (including the URL, the page title, and a description) will be presented in a GUI.
@@ -748,7 +772,19 @@ Expected parameters include:
             ...
             ```
 
-    You may also pass your own valid embed.
+        - `presentation`
+
+            A hint to clients about how to present the video. Known values are `default` and `gif`.
+
+            ```perl
+            ...
+            presentation => 'gif',
+            ...
+            ```
+
+    You may also pass your own valid embed: any hashref carrying a `$type` key is used verbatim. This is how the video
+    service flow is embedded, using ["videoEmbed( $blob, %opts )"](#videoembed-blob-opts) to wrap the processed blob returned by
+    ["getVideoJobStatus( $jobId )"](#getvideojobstatus-jobid).
 
 - `labels`
 
@@ -761,7 +797,8 @@ Expected parameters include:
     These are not visible in the current Bluesky interface but do cause posts to return as results to to search (such as
     [https://bsky.app/hashtag/perl](https://bsky.app/hashtag/perl).
 
-Note that a post may only contain one of the following embeds: `image`, `video`, `embed_url`, or `embed_ref`.
+Note that a post may only contain one of the following embeds: `images`, `gallery`, `video`, `embed_url`, or
+`embed_ref`.
 
 ## `deletePost( ... )`
 
@@ -1681,8 +1718,15 @@ directly. Returns the blob on success.
 
 ## `uploadImages( @images )`
 
-Uploads up to 4 images (paths, raw bytes, Path::Tiny objects, or `{ image => ..., alt => ..., mime => ...
-}` hashrefs) and returns an `app.bsky.embed.images` structure.
+Uploads up to 4 images (paths, raw bytes, Path::Tiny objects, or `{ image => ..., alt => ..., mime => ...,
+aspectRatio => { width => ..., height => ... } }` hashrefs) and returns an `app.bsky.embed.images`
+structure.
+
+## `uploadGallery( @items )`
+
+Uploads gallery items (same accepted forms as ["uploadImages( @images )"](#uploadimages-images)) and returns an
+`app.bsky.embed.gallery` structure. Each item becomes an `app.bsky.embed.gallery#image` and may carry an
+`aspectRatio`.
 
 ## `uploadVideoCaption( $lang, $caption )`
 
@@ -1690,8 +1734,30 @@ Uploads a WebVTT caption file and returns an `app.bsky.embed.video#caption` stru
 
 ## `uploadVideo( $video )`
 
-Uploads a video (path, raw bytes, Path::Tiny object, or hashref with `video`, `alt`, `mime`, `aspectRatio`, and
-`captions`) and returns an `app.bsky.embed.video` structure.
+Uploads a video blob (path, raw bytes, Path::Tiny object, or hashref with `video`, `alt`, `mime`, `aspectRatio`,
+`presentation`, and `captions`) and returns an `app.bsky.embed.video` structure.
+
+This uploads a finished video blob straight to the PDS. To run the video service's server-side processing job instead,
+use ["uploadVideoJob( $bytes\_or\_path, \[ $mime\_type, %opts \] )"](#uploadvideojob-bytes_or_path-mime_type-opts) and then ["videoEmbed( $blob, %opts )"](#videoembed-blob-opts).
+
+## `videoEmbed( $blob, %opts )`
+
+Builds an `app.bsky.embed.video` structure from an already-uploaded blob, typically the processed blob returned by
+["getVideoJobStatus( $jobId )"](#getvideojobstatus-jobid) after ["uploadVideoJob( $bytes\_or\_path, \[ $mime\_type, %opts \] )"](#uploadvideojob-bytes_or_path-mime_type-opts). Recognized `%opts`
+are `alt`, `aspectRatio`, `presentation` (`default` or `gif`), and `captions` (either `{ lang => file }`
+or `[ { lang => ..., file => ... } ]`). Caption files are uploaded for you.
+
+```perl
+my $job    = $bsky->uploadVideoJob( 'clip.mp4', 'video/mp4', did => $bsky->did, name => 'clip.mp4' );
+my $status = $bsky->getVideoJobStatus( $job->{jobId} );
+my $embed  = $bsky->videoEmbed( $status->{blob},
+    alt          => 'A cat playing a piano',
+    aspectRatio  => { width => 1280, height => 720 },
+    presentation => 'default',
+    captions     => { en => 'captions.en.vtt' },
+);
+$bsky->createPost( text => 'Music!', embed => $embed );
+```
 
 ## `getEmbedRef( $uri )`
 

@@ -396,17 +396,26 @@ package Bluesky v1.6.0 {
 
             # embeds
             if ( defined $args{embed} ) {
-                if ( defined $args{embed}{images} ) {
-                    $post{embed} = $self->uploadImages( @{ $args{embed}{images} } );
+                my $embed = $args{embed};
+                if ( defined $embed->{'$type'} ) {
+
+                    # A fully-built embed (e.g. from videoEmbed()) used as-is.
+                    $post{embed} = $embed;
                 }
-                elsif ( defined $args{embed}{video} ) {
-                    $post{embed} = $self->uploadVideo( $args{embed}{video} );
+                elsif ( defined $embed->{images} ) {
+                    $post{embed} = $self->uploadImages( @{ $embed->{images} } );
                 }
-                elsif ( defined $args{embed}{url} ) {
-                    $post{embed} = $self->fetch_embed_url_card( $args{embed}{url} );
+                elsif ( defined $embed->{video} ) {
+                    $post{embed} = $self->uploadVideo( $embed->{video} );
                 }
-                elsif ( defined $args{embed}{ref} ) {
-                    $post{embed} = $self->getEmbedRef( $args{embed}{ref} );
+                elsif ( defined $embed->{gallery} ) {
+                    $post{embed} = $self->uploadGallery( @{ $embed->{gallery} } );
+                }
+                elsif ( defined $embed->{url} ) {
+                    $post{embed} = $self->fetch_embed_url_card( $embed->{url} );
+                }
+                elsif ( defined $embed->{ref} ) {
+                    $post{embed} = $self->getEmbedRef( $embed->{ref} );
                 }
             }
             my $res = $self->at->create_record( 'app.bsky.feed.post', \%post );
@@ -1102,37 +1111,73 @@ package Bluesky v1.6.0 {
             return At::Error->new( message => $msg, fatal => 1 );
         }
 
+        # Upload a single image (path, bytes, handle, or Path::Tiny object),
+        # enforcing the 1 MB legacy image guard, and return its blob. Shared by
+        # the images and gallery embeds.
+        method _upload_image ( $img, $mime = undef ) {
+            if ( builtin::blessed $img && $img->can('slurp_raw') ) {
+                my $sz = $img->can('size') ? $img->size : length( $img->slurp_raw );
+                At::Error->new( message => 'image file size too large. 1000000 bytes maximum, got: ' . $sz )->throw if $sz > 1000000;
+                $img = $img->slurp_raw;
+            }
+            elsif ( !ref $img && $img !~ /[\x00-\x1f]/ && -e $img ) {
+                my $p  = path($img);
+                my $sz = $p->size;
+                At::Error->new( message => 'image file size too large. 1000000 bytes maximum, got: ' . $sz )->throw if $sz > 1000000;
+                $img = $p->slurp_raw;
+            }
+            else {
+                my $sz = length $img;
+                At::Error->new( message => 'image file size too large. 1000000 bytes maximum, got: ' . $sz )->throw if $sz > 1000000;
+            }
+            my $blob = $self->uploadFile( $img, $mime );
+            builtin::blessed($blob) && $blob->isa('At::Error') ? $blob->throw : ();
+            $blob || At::Error->new( message => 'upload failed', fatal => 1 )->throw;
+            $blob;
+        }
+
+        # app.bsky.embed.images - up to 4 images, each { image, alt, [aspectRatio] }
         method uploadImages(@images) {
             my @ret;
             for my $img (@images) {
-                my $alt  = '';
-                my $mime = ();
+                my ( $alt, $mime, $aspectRatio ) = ( '', undef, undef );
                 if ( ( builtin::reftype($img) // '' ) eq 'HASH' ) {
-                    $alt  = $img->{alt};
-                    $mime = $img->{mime} // ();
-                    $img  = $img->{image};
+                    $alt         = $img->{alt} // '';
+                    $mime        = $img->{mime} // ();
+                    $aspectRatio = $img->{aspectRatio};
+                    $img         = $img->{image};
                 }
-                if ( builtin::blessed $img && $img->can('slurp_raw') ) {
-                    my $sz = $img->can('size') ? $img->size : length( $img->slurp_raw );
-                    At::Error->new( message => 'image file size too large. 1000000 bytes maximum, got: ' . $sz )->throw if $sz > 1000000;
-                    $img = $img->slurp_raw;
-                }
-                elsif ( !ref $img && $img !~ /[\x00-\x1f]/ && -e $img ) {
-                    my $p  = path($img);
-                    my $sz = $p->size;
-                    At::Error->new( message => 'image file size too large. 1000000 bytes maximum, got: ' . $sz )->throw if $sz > 1000000;
-                    $img = $p->slurp_raw;
-                }
-                else {
-                    my $sz = length $img;
-                    At::Error->new( message => 'image file size too large. 1000000 bytes maximum, got: ' . $sz )->throw if $sz > 1000000;
-                }
-                my $blob = $self->uploadFile( $img, $mime );
-                builtin::blessed($blob) && $blob->isa('At::Error') ? $blob->throw : ();
-                $blob || At::Error->new( message => 'upload failed', fatal => 1 )->throw;
-                push @ret, { alt => $alt, image => $blob };
+                my $blob = $self->_upload_image( $img, $mime );
+                push @ret, {
+                    alt   => $alt,
+                    image => $blob,
+                    ( defined $aspectRatio ? ( aspectRatio => $aspectRatio ) : () ),
+                };
             }
             { '$type' => 'app.bsky.embed.images', images => \@ret };
+        }
+
+        # app.bsky.embed.gallery - up to 20 media items (soft limit 10 in clients),
+        # each item being an app.bsky.embed.gallery#image { image, alt, [aspectRatio] }
+        method uploadGallery(@items) {
+            my @ret;
+            for my $item (@items) {
+                my ( $alt, $mime, $aspectRatio ) = ( '', undef, undef );
+                if ( ( builtin::reftype($item) // '' ) eq 'HASH' ) {
+                    $alt         = $item->{alt} // '';
+                    $mime        = $item->{mime} // ();
+                    $aspectRatio = $item->{aspectRatio};
+                    $item        = $item->{image};
+                }
+                my $blob = $self->_upload_image( $item, $mime );
+                push @ret, {
+                    '$type' => 'app.bsky.embed.gallery#image',
+                    image   => $blob,
+                    alt     => $alt,
+                    ( defined $aspectRatio ? ( aspectRatio => $aspectRatio ) : () ),
+                };
+            }
+            { '$type' => 'app.bsky.embed.gallery', items => \@ret };
         }
 
         method uploadVideoCaption( $lang, $caption ) {
@@ -1151,16 +1196,43 @@ package Bluesky v1.6.0 {
             { '$type' => 'app.bsky.embed.video#caption', lang => $lang, file => $blob };
         }
 
-        method uploadVideo($vid) {
-            my @ret;
-            my ( $alt, $mime, $aspectRatio );
+        # Build an app.bsky.embed.video from an already-uploaded blob (for example
+        # the processed blob returned by getVideoJobStatus after uploadVideoJob).
+        # %opts: alt, aspectRatio, presentation (default|gif), captions
+        # (either { lang => file } or [ { lang => ..., file => ... } ]).
+        method videoEmbed ( $blob, %opts ) {
             my @captions;
+            if ( defined $opts{captions} ) {
+                my $captions = $opts{captions};
+                if ( ( builtin::reftype($captions) // '' ) eq 'HASH' ) {
+                    @captions = map { $self->uploadVideoCaption( $_, $captions->{$_} ) } sort keys %$captions;
+                }
+                elsif ( ( builtin::reftype($captions) // '' ) eq 'ARRAY' ) {
+                    for my $c ( @$captions ) {
+                        next unless ( builtin::reftype($c) // '' ) eq 'HASH';
+                        push @captions, $self->uploadVideoCaption( $c->{lang}, $c->{file} // $c->{caption} // $c->{vtt} );
+                    }
+                }
+            }
+            {
+                '$type' => 'app.bsky.embed.video',
+                video   => $blob,
+                ( @captions ? ( captions => \@captions ) : () ),
+                ( defined $opts{alt}          ? ( alt          => $opts{alt} )          : () ),
+                ( defined $opts{aspectRatio}  ? ( aspectRatio  => $opts{aspectRatio} )  : () ),
+                ( defined $opts{presentation} ? ( presentation => $opts{presentation} ) : () ),
+            };
+        }
+
+        method uploadVideo($vid) {
+            my ( $alt, $mime, $aspectRatio, $presentation, $captions );
             if ( ( builtin::reftype($vid) // '' ) eq 'HASH' ) {
-                $alt         = $vid->{alt};
-                $mime        = $vid->{mime} // ();
-                $aspectRatio = $vid->{aspectRatio};
-                @captions    = map { { lang => $_, file => $self->uploadFile( $vid->{captions}{$_}, 'text/vtt' ) } } keys %{ $vid->{captions} };
-                $vid         = $vid->{video};
+                $alt          = $vid->{alt};
+                $mime         = $vid->{mime} // ();
+                $aspectRatio  = $vid->{aspectRatio};
+                $presentation = $vid->{presentation};
+                $captions     = $vid->{captions};
+                $vid          = $vid->{video};
             }
             if ( builtin::blessed $vid && $vid->can('slurp_raw') ) {
                 my $szv = $vid->can('size') ? $vid->size : length( $vid->slurp_raw );
@@ -1179,12 +1251,7 @@ package Bluesky v1.6.0 {
             my $blob = $self->uploadFile( $vid, $mime );
             builtin::blessed($blob) && $blob->isa('At::Error') ? $blob->throw : ();
             $blob || At::Error->new( message => 'upload failed', fatal => 1 )->throw;
-            return {
-                '$type' => 'app.bsky.embed.video',
-                video   => $blob,
-                ( @captions            ? ( captions    => \@captions )   : () ), ( defined $alt ? ( alt => $alt ) : () ),
-                ( defined $aspectRatio ? ( aspectRatio => $aspectRatio ) : () )
-            };
+            return $self->videoEmbed( $blob, alt => $alt, aspectRatio => $aspectRatio, presentation => $presentation, captions => $captions );
         }
 
         method getEmbedRef($uri) {

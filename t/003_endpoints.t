@@ -16,6 +16,7 @@ use Bluesky;
         field $last_get;
         field $last_post;
         field $last_writes = [];
+        field $last_record;
         method did()  {$did}
         method host() {'https://bsky.social'}
 
@@ -105,6 +106,12 @@ use Bluesky;
         method last_post()   {$last_post}
         method last_writes() {$last_writes}
 
+        method create_record ( $collection, $record, $rkey = undef ) {
+            $last_record = { collection => $collection, record => $record, rkey => $rkey };
+            return { uri => 'at://did:plc:mock-user/app.bsky.feed.post/abc123', cid => 'bafy-post-cid' };
+        }
+        method last_record() {$last_record}
+
         method http() {
             state $h = bless { token_type => 'Bearer' }, 'Mock::HTTP';
 
@@ -162,6 +169,18 @@ my $mock = Mock::At->new();
 
     # Video service calls go straight to the sidecar service over HTTP::Tiny
     *Bluesky::_video_http = sub { Mock::HTTP::Tiny->new };
+
+    # Blob uploads are stubbed so media embeds never touch the network.
+    *Bluesky::uploadFile = sub {
+        my ( $self, $bytes, $mime ) = @_;
+        my $size = length( defined $bytes ? $bytes : '' );
+        return {
+            '$type'   => 'blob',
+            ref       => { '$link' => 'bafymock' . $size },
+            mimeType  => $mime // 'application/octet-stream',
+            size      => $size,
+        };
+    };
 }
 my $bsky = Bluesky->new();
 subtest 'Feed additions' => sub {
@@ -210,6 +229,47 @@ subtest 'Video service' => sub {
     }
     my $pds_did = $bsky->_pds_did;
     is $pds_did, 'did:web:bsky.social', '_pds_did derives did:web from PDS host';
+};
+subtest 'Media embeds' => sub {
+    my $images = $bsky->uploadImages(
+        { image => 'fake-png', alt => 'first', aspectRatio => { width => 4, height => 3 } },
+        { image => 'fake-png', alt => 'second' },
+    );
+    is $images->{'$type'},                       'app.bsky.embed.images',        'uploadImages builds images embed';
+    is $images->{images}[0]{alt},                'first',                        'uploadImages passes alt';
+    is $images->{images}[0]{aspectRatio}{width}, 4,                              'uploadImages passes aspectRatio';
+    ok !exists $images->{images}[1]{aspectRatio},                                'uploadImages omits aspectRatio when absent';
+    is $images->{images}[0]{image}{mimeType},    'application/octet-stream',     'uploadImages attaches blob';
+
+    my $gallery = $bsky->uploadGallery(
+        { image => 'fake-png', alt => 'one',   aspectRatio => { width => 1, height => 1 } },
+        { image => 'fake-png', alt => 'two' },
+    );
+    is $gallery->{'$type'},                    'app.bsky.embed.gallery',           'uploadGallery builds gallery embed';
+    is $gallery->{items}[0]{'$type'},          'app.bsky.embed.gallery#image',     'uploadGallery tags items';
+    is $gallery->{items}[0]{aspectRatio}{height}, 1,                              'uploadGallery passes aspectRatio';
+    is $gallery->{items}[1]{alt},              'two',                              'uploadGallery passes alt';
+
+    my $video = $bsky->videoEmbed(
+        { '$type' => 'blob', ref => { '$link' => 'bafyvid' }, mimeType => 'video/mp4', size => 42 },
+        alt          => 'a short clip',
+        aspectRatio  => { width => 1280, height => 720 },
+        presentation => 'gif',
+        captions     => { en => "WEBVTT\n\n00:00.000 --> 00:01.000\nHi\n" },
+    );
+    is $video->{'$type'},              'app.bsky.embed.video',   'videoEmbed builds video embed';
+    is $video->{alt},                  'a short clip',           'videoEmbed passes alt';
+    is $video->{presentation},         'gif',                    'videoEmbed passes presentation';
+    is $video->{aspectRatio}{height},  720,                      'videoEmbed passes aspectRatio';
+    is $video->{captions}[0]{lang},    'en',                     'videoEmbed uploads captions';
+    is $video->{captions}[0]{file}{mimeType}, 'text/vtt',        'videoEmbed caption blob is text/vtt';
+
+    $bsky->createPost( text => 'gallery post', timestamp => '2026-01-01T00:00:00.000Z', embed => { gallery => [ { image => 'fake-png', alt => 'x' } ] } );
+    is $mock->last_record->{record}{embed}{'$type'}, 'app.bsky.embed.gallery', 'createPost routes gallery embed';
+
+    $bsky->createPost( text => 'video post', timestamp => '2026-01-01T00:00:00.000Z', embed => $video );
+    is $mock->last_record->{record}{embed}{'$type'}, 'app.bsky.embed.video', 'createPost accepts a pre-built embed';
+    is $mock->last_record->{record}{embed}{video}{ref}{'$link'}, 'bafyvid', 'createPost preserves the video blob';
 };
 subtest Drafts => sub {
     is ref $bsky->getDrafts(), 'ARRAY', 'getDrafts returns arrayref';

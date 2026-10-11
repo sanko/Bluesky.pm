@@ -669,6 +669,26 @@ Set alt text by passing a hash.
         text     => 'I found this image on https://google.com/'
     );
 
+Each image may also carry an C<aspectRatio> (C<< { width =E<gt> 4, height =E<gt> 3 } >>).
+
+    $bsky->createPost(
+        embed => { images => [ { image => 'path/to/my.jpg', alt => 'A frog.', aspectRatio => { width => 4, height => 3 } } ] },
+        text  => 'Look at this!'
+    );
+
+=item C<gallery>
+
+A gallery embed (C<app.bsky.embed.gallery>). The schema allows up to 20 items, though clients currently soft-limit
+authoring UIs to 10. Each item is a hash with C<image> and C<alt>, plus an optional C<aspectRatio>.
+
+    $bsky->createPost(
+        embed => { gallery => [
+            { image => 'one.jpg', alt => 'First',  aspectRatio => { width => 4, height => 3 } },
+            { image => 'two.jpg', alt => 'Second', aspectRatio => { width => 1, height => 1 } },
+        ] },
+        text => 'A little gallery.'
+    );
+
 =item C<url>
 
 A card (including the URL, the page title, and a description) will be presented in a GUI.
@@ -728,11 +748,21 @@ This is a hash reference of up to 20 L<WebVTT|https://en.wikipedia.org/wiki/WebV
     },
     ...
 
-=back
+=item C<presentation>
+
+A hint to clients about how to present the video. Known values are C<default> and C<gif>.
+
+    ...
+    presentation => 'gif',
+    ...
 
 =back
 
-You may also pass your own valid embed.
+=back
+
+You may also pass your own valid embed: any hashref carrying a C<$type> key is used verbatim. This is how the video
+service flow is embedded, using L</"videoEmbed( $blob, %opts )"> to wrap the processed blob returned by
+L</"getVideoJobStatus( $jobId )">.
 
 =item C<labels>
 
@@ -747,7 +777,8 @@ L<https://bsky.app/hashtag/perl>.
 
 =back
 
-Note that a post may only contain one of the following embeds: C<image>, C<video>, C<embed_url>, or C<embed_ref>.
+Note that a post may only contain one of the following embeds: C<images>, C<gallery>, C<video>, C<embed_url>, or
+C<embed_ref>.
 
 =head2 C<deletePost( ... )>
 
@@ -1516,8 +1547,15 @@ directly. Returns the blob on success.
 
 =head2 C<uploadImages( @images )>
 
-Uploads up to 4 images (paths, raw bytes, Path::Tiny objects, or C<{ image =E<gt> ..., alt =E<gt> ..., mime =E<gt> ...
-}> hashrefs) and returns an C<app.bsky.embed.images> structure.
+Uploads up to 4 images (paths, raw bytes, Path::Tiny objects, or C<{ image =E<gt> ..., alt =E<gt> ..., mime =E<gt> ...,
+aspectRatio =E<gt> { width =E<gt> ..., height =E<gt> ... } }> hashrefs) and returns an C<app.bsky.embed.images>
+structure.
+
+=head2 C<uploadGallery( @items )>
+
+Uploads gallery items (same accepted forms as L</"uploadImages( @images )">) and returns an
+C<app.bsky.embed.gallery> structure. Each item becomes an C<app.bsky.embed.gallery#image> and may carry an
+C<aspectRatio>.
 
 =head2 C<uploadVideoCaption( $lang, $caption )>
 
@@ -1525,8 +1563,28 @@ Uploads a WebVTT caption file and returns an C<app.bsky.embed.video#caption> str
 
 =head2 C<uploadVideo( $video )>
 
-Uploads a video (path, raw bytes, Path::Tiny object, or hashref with C<video>, C<alt>, C<mime>, C<aspectRatio>, and
-C<captions>) and returns an C<app.bsky.embed.video> structure.
+Uploads a video blob (path, raw bytes, Path::Tiny object, or hashref with C<video>, C<alt>, C<mime>, C<aspectRatio>,
+C<presentation>, and C<captions>) and returns an C<app.bsky.embed.video> structure.
+
+This uploads a finished video blob straight to the PDS. To run the video service's server-side processing job instead,
+use L</"uploadVideoJob( $bytes_or_path, [ $mime_type, %opts ] )"> and then L</"videoEmbed( $blob, %opts )">.
+
+=head2 C<videoEmbed( $blob, %opts )>
+
+Builds an C<app.bsky.embed.video> structure from an already-uploaded blob, typically the processed blob returned by
+L</"getVideoJobStatus( $jobId )"> after L</"uploadVideoJob( $bytes_or_path, [ $mime_type, %opts ] )">. Recognized C<%opts>
+are C<alt>, C<aspectRatio>, C<presentation> (C<default> or C<gif>), and C<captions> (either C<< { lang =E<gt> file } >>
+or C<< [ { lang =E<gt> ..., file =E<gt> ... } ] >>). Caption files are uploaded for you.
+
+    my $job    = $bsky->uploadVideoJob( 'clip.mp4', 'video/mp4', did => $bsky->did, name => 'clip.mp4' );
+    my $status = $bsky->getVideoJobStatus( $job->{jobId} );
+    my $embed  = $bsky->videoEmbed( $status->{blob},
+        alt          => 'A cat playing a piano',
+        aspectRatio  => { width => 1280, height => 720 },
+        presentation => 'default',
+        captions     => { en => 'captions.en.vtt' },
+    );
+    $bsky->createPost( text => 'Music!', embed => $embed );
 
 =head2 C<getEmbedRef( $uri )>
 

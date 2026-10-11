@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `uploadGallery` builds `app.bsky.embed.gallery` embeds, and `createPost` accepts `embed => { gallery => [ ... ] }`. Each item supports `image`, `alt`, and `aspectRatio`.
+- `videoEmbed( $blob, %opts )` wraps an already-uploaded video blob (such as the processed blob from `getVideoJobStatus`) as an `app.bsky.embed.video` with `alt`, `aspectRatio`, `presentation`, and `captions`.
+- `uploadImages` and `uploadGallery` now pass through a per-image `aspectRatio`; `uploadVideo` now accepts `presentation`.
+- `createPost` accepts a fully-built embed (any hashref carrying a `$type`), so embeds produced by `videoEmbed` can be posted directly.
+
 ### Changed
 - Video upload now targets the video service host (`https://video.bsky.app`) and authenticates with a short-lived service token minted via `com.atproto.server.getServiceAuth`, sent as a plain `Bearer` token. `uploadVideoJob` previously posted to the PDS with the session's DPoP token, which returns `501 Method Not Implemented`. The `did`/`name` query parameters and return value (`jobStatus`, including `409 AlreadyExists`) are unchanged.
 
